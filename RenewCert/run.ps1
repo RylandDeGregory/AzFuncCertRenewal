@@ -23,22 +23,9 @@ Write-Host 'Creating Posh-ACME config home'
 $TempDir = './tmp'
 New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
-if (-not (Test-Path 'AzCopy.exe')) {
-    Write-Host 'Downloading AzCopy and extracting to current directory'
-    Invoke-WebRequest -Uri 'https://aka.ms/downloadazcopy-v10-windows' -OutFile 'AzCopy.zip' -UseBasicParsing
-
-    # Extract archive and move executable to current directory
-    Expand-Archive -Path './AzCopy.zip' -DestinationPath './AzCopy' -Force
-    Get-ChildItem './AzCopy/*/AzCopy.exe' | Copy-Item -Destination './AzCopy.exe'
-
-    # Remove archive and extracted directory
-    Remove-Item './AzCopy.zip' -Force -ErrorAction SilentlyContinue | Out-Null
-    Remove-Item './AzCopy' -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
-}
-
 # Download Posh-ACME configuration from Storage Account using AzCopy
 Write-Host 'Syncing current Posh-ACME configuration from Storage Account'
-./AzCopy.exe sync $SasUrl $TempDir --recursive
+.\azcopy.exe sync $SasUrl $TempDir --recursive
 
 # Initialize Posh-ACME
 $env:POSHACME_HOME = $TempDir

@@ -1,6 +1,8 @@
-
 # Azure Functions artifacts
 bin
 obj
 appsettings.json
 local.settings.json
+
+# MacOS
+.DS_Store
