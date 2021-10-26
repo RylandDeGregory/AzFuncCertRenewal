@@ -4,6 +4,6 @@
 @{
     # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'.
     # To use the Az module in your function app, please uncomment the line below.
-    'Az' = '5.*'
-    'Posh-Acme' = '4.3.2'
+    'Az' = '6.*'
+    'Posh-Acme' = '4.10.2'
 }

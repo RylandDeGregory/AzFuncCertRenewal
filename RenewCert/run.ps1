@@ -20,7 +20,7 @@ $SubscriptionId = (Get-AzContext).Subscription.Id
 
 # Create Posh-ACME config directory
 Write-Host 'Creating Posh-ACME config home'
-$TempDir = './tmp'
+$TempDir = $env:POSHACME_HOME
 if (Test-Path -Path $TempDir) {
     Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
 }
@@ -32,7 +32,6 @@ Write-Host 'Syncing current Posh-ACME configuration from Storage Account'
 
 # Initialize Posh-ACME
 Write-Host "Initializing PoshACME in $TempDir"
-$env:POSHACME_HOME = $TempDir
 Import-Module Posh-ACME -Force -Verbose
 
 try {
