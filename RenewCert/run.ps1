@@ -28,6 +28,7 @@ Write-Host 'Syncing current Posh-ACME configuration from Storage Account'
 .\azcopy.exe sync $SasUrl $TempDir --recursive
 
 # Initialize Posh-ACME
+Write-Host "Initializing PoshACME in $TempDir"
 $env:POSHACME_HOME = $TempDir
 Import-Module Posh-ACME -Force
 
@@ -42,14 +43,16 @@ Write-Host "Got Posh-ACME certificate configuration for $($CertOrder.MainDomain)
 #endregion Configure
 
 #region Renew
-if ($CertOrder.status -ne 'valid') {
+if ([datetime]$CertOrder.RenewAfter -le (Get-Date)) {
+    # Get Azure Key Vault certificate file
+    Write-Host "Certificate is ready for renewal as of $([datetime]$CertOrder.RenewAfter). Renewing certificate..."
     $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -ErrorAction SilentlyContinue
 
     if ($AKVCert -and $AKVCert.Thumbprint -eq (Get-PACertificate).Thumbprint) {
         Write-Host "Certificate is $($CertOrder.status). Submitting renewal for $($CertOrder.MainDomain) certificate with thumbprint: $CertThumbprint"
         $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AZUseIMDS = $true }
     } else {
-        Write-Error 'Key Vault certificate thumbprint does not match Posh-ACME certificate thumbprint. Investigate and eliminate the inconsistency.'
+        Write-Error 'Azure Key Vault certificate thumbprint does not match Posh-ACME certificate thumbprint. Investigate and eliminate the inconsistency.'
     }
 
     if (-not $AKVCert -or $AKVCert.Thumbprint -ne $NewCert.Thumbprint) {
@@ -61,8 +64,9 @@ if ($CertOrder.status -ne 'valid') {
         Write-Host "Importing updated certificate to Azure Key Vault with thumbprint: $($NewCert.Thumbprint)"
         Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
 
-        Write-Host 'Syncing updated Posh-ACME configuration to Storage Account. Complete.'
+        Write-Host 'Syncing updated Posh-ACME configuration to Storage Account.'
         ./AzCopy.exe sync $TempDir $SasUrl --recursive
+        Write-Host 'Sync to Storage Account successful. Complete.'
     } else {
         Write-Host 'Azure Key Vault certificate thumbprint matches Posh-ACME certificate thumbprint. Complete.'
     }
