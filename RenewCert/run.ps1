@@ -21,6 +21,9 @@ $SubscriptionId = (Get-AzContext).Subscription.Id
 # Create Posh-ACME config directory
 Write-Host 'Creating Posh-ACME config home'
 $TempDir = './tmp'
+if (Test-Path -Path $TempDir) {
+    Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+}
 New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
 # Download Posh-ACME configuration from Storage Account using AzCopy
