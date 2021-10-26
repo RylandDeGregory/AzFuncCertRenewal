@@ -33,10 +33,11 @@ Write-Host 'Syncing current Posh-ACME configuration from Storage Account'
 # Initialize Posh-ACME
 Write-Host "Initializing PoshACME in $TempDir"
 $env:POSHACME_HOME = $TempDir
-Import-Module Posh-ACME -Force
+Import-Module Posh-ACME -Force -Verbose
 
 try {
     # Get certificate order configuration
+    Write-Host 'Getting certificate order from synced PoshACME directory'
     $CertOrder = Get-PAOrder
 } catch {
     Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that location.'
