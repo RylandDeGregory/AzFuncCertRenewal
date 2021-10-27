@@ -1,7 +1,7 @@
 #region Init
 param($Timer)
 
-# Disable progress messages from Posh-ACME module
+# Disable progress messages
 $global:ProgressPreference = 'SilentlyContinue'
 
 # Stop on error
@@ -9,31 +9,34 @@ $ErrorActionPreference = 'Stop'
 
 # Get variables from Function App Settings
 $KeyVaultName = $env:KEY_VAULT_NAME
-$AKVCertNames  = $env:AKV_CERT_NAME -split ', '
+$AKVCertNames = $env:AKV_CERT_NAME -split ', '
 $TempDir      = $env:POSHACME_HOME
+
+# Get Subscription Id and Tenant Id from the Function context
+$SubscriptionId = (Get-AzContext).Subscription.Id
+$TenantId       = (Get-AzContext).Tenant.Id
 #endregion Init
 
 #region Configure
-# Get Storage Account secret from Key Vault and Subscription Id from the Function context
+# Get Storage Account secret from Key Vault
 Write-Information 'Getting Storage Account connection information'
 $SasUrl = Get-AzKeyVaultSecret -VaultName $KeyVaultName -SecretName 'ACME-SAS' -AsPlainText
 
+# Generate an Azure Access Token for use by Posh-ACME with the Azure DNS plugin
 Write-Information 'Generating Access Token using Function App MSI'
-$SubscriptionId = (Get-AzContext).Subscription.Id
-$TenantId       = (Get-AzContext).Tenant.Id
-$AzToken        = (Get-AzAccessToken -ResourceUrl "https://management.core.windows.net/" -TenantId $TenantId).Token
+$AzToken = (Get-AzAccessToken -ResourceUrl 'https://management.core.windows.net/' -TenantId $TenantId).Token
 
-# Create Posh-ACME config directory
+# Create Posh-ACME config directory if it does not exist
 if (-not (Test-Path -Path $TempDir)) {
-    Write-Information 'Creating Posh-ACME config home'
+    Write-Information 'Creating Posh-ACME home directory'
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 }
 
-# Download Posh-ACME configuration from Storage Account using AzCopy
+# Download Posh-ACME configuration from Azure Storage using AzCopy
 Write-Information "Syncing current Posh-ACME configuration from Storage Account to $TempDir"
-.\azcopy.exe sync $SasUrl $TempDir --recursive
+.\azcopy.exe sync $SasUrl $TempDir --delete-destination
 
-Write-Information 'Wait for AzCopy to exit before initializing Posh-ACME'
+Write-Information 'Waiting for AzCopy to exit before initializing Posh-ACME'
 Start-Sleep -Seconds 20
 
 # Initialize Posh-ACME
@@ -41,62 +44,65 @@ Write-Information "Initializing Posh-ACME in $TempDir"
 Import-Module Posh-ACME -Force -Verbose
 
 try {
-    # Get certificate order configuration
+    # Get LetsEncrypt certificate order configuration
     Write-Information 'Getting certificate orders from synced Posh-ACME directory'
     $CertOrders = Get-PAOrder -List
 } catch {
-    Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that location.'
+    Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that location'
 }
 #endregion Configure
 
 #region Renew
 foreach ($CertOrder in $CertOrders) {
-    if ($CertOrder) {
-        Write-Information "Got Posh-ACME certificate configuration for $($CertOrder.MainDomain). Valid until $($CertOrder.CertExpires)"
-        if ($CertOrder.MainDomain -like 'www*') {
-            $AKVCertName = $AKVCertNames | Where-Object { $_ -like 'www*' }
-        } else {
-            $AKVCertName = $AKVCertNames | Where-Object { $_ -notlike 'www*' }
-        }
+    Write-Information "Found LetsEncrypt certificate configuration for $($CertOrder.MainDomain). Certificate is valid until $(Get-Date $CertOrder.CertExpires)"
+
+    # Select AKV certificate name based on the domain name associated with the current LetsEncrypt certificate
+    if ($CertOrder.MainDomain -like 'www*') {
+        $AKVCertName = $AKVCertNames | Where-Object { $_ -like 'www*' }
     } else {
-        Write-Error 'Unable to find certificate order configuration in Posh-ACME home directory'
+        $AKVCertName = $AKVCertNames | Where-Object { $_ -notlike 'www*' }
     }
 
+    # Check if the LetsEncrypt certificate is available for renewal
     if ((Get-Date $CertOrder.RenewAfter) -le (Get-Date)) {
-        # Get Azure Key Vault certificate file
-        Write-Information "Certificate is ready for renewal as of $([datetime]$CertOrder.RenewAfter). Renewing certificate..."
+        Write-Information "Certificate is ready for renewal as of $(Get-Date $CertOrder.RenewAfter). Renewing certificate..."
+
+        # Get Azure Key Vault certificate object
         $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName
 
-        if ($AKVCert.Thumbprint -eq (Get-PACertificate).Thumbprint) {
-            Write-Information "Certificate is $($CertOrder.status). Submitting renewal for $($CertOrder.MainDomain) certificate with thumbprint: $((Get-PACertificate).Thumbprint)"
+        # Get LetsEncrypt certificate object
+        $LECert = Get-PACertificate
+
+        # Ensure that the AKV certificate matches the LetsEncrypt certificate synced from Azure Storage
+        if ($AKVCert.Thumbprint -eq $LECert.Thumbprint) {
+            Write-Information "Certificate is $($CertOrder.status). Submitting renewal for certificate with thumbprint: $($LECert.Thumbprint)"
+
+            # Renew the certificate using Posh-ACME and the Azure DNS plugin
             $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AzAccessToken = $AzToken } -Verbose
         } elseif (-not $AKVCert) {
-            Write-Error "Azure Key Vault certificate not found. Please investigate."
+            Write-Error "Azure Key Vault certificate with name $AKVCertName was not found in Key Vault $KeyVaultName"
         } else {
-            Write-Information "AKV: $($AKVCert.Thumbprint)"
-            Write-Information "ACME: $((Get-PACertificate).Thumbprint)"
-            Write-Error 'Azure Key Vault certificate thumbprint does not match Posh-ACME certificate thumbprint. Investigate and eliminate the inconsistency.'
+            Write-Error "Azure Key Vault certificate thumbprint [$($AKVCert.Thumbprint)] does not match LetsEncrypt certificate thumbprint [$($LECert.Thumbprint)] prior to renewal. Please eliminate the inconsistency"
         }
 
+        # Ensure that a new certificate was generated by Posh-ACME and that it does not match the current AKV certificate
         if ($NewCert -and $AKVCert.Thumbprint -ne $NewCert.Thumbprint) {
             # Set certificate file information for Key Vault import
             $ServerName  = ([system.uri](Get-PAServer).location).host
             $AccountName = (Get-PAAccount).id
             $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
 
-            Write-Information "Importing updated certificate to Azure Key Vault with thumbprint: $($NewCert.Thumbprint)"
+            Write-Information "Importing updated certificate with thumbprint [$($NewCert.Thumbprint)] to Azure Key Vault"
             Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
 
-            Write-Information 'Syncing updated Posh-ACME configuration to Storage Account.'
-            ./AzCopy.exe sync $TempDir $SasUrl --recursive
-            Write-Information 'Sync to Storage Account successful. Complete.'
+            Write-Information 'Syncing updated Posh-ACME configuration to Storage Account'
+            .\azcopy.exe sync $TempDir $SasUrl
+            Write-Information 'Sync to Storage Account successful. Renewal complete.'
         } elseif (-not $NewCert) {
-            Write-Error 'New certificate was not successfully generated by Posh-ACME'
-        } else {
-            Write-Information 'Azure Key Vault certificate thumbprint matches Posh-ACME certificate thumbprint. Complete.'
+            Write-Error 'Certificate was not successfully renewed by Posh-ACME'
         }
     } else {
-        Write-Information "Certificate for $($CertOrder.MainDomain) is valid until $($CertOrder.CertExpires). Complete."
+        Write-Information "LetsEncrypt certificate for $($CertOrder.MainDomain) is valid until $($CertOrder.CertExpires). No action required for this certificate"
     }
-    #endregion Renew
 }
+#endregion Renew
