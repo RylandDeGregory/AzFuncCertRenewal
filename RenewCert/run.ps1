@@ -9,80 +9,94 @@ $ErrorActionPreference = 'Stop'
 
 # Get variables from Function App Settings
 $KeyVaultName = $env:KEY_VAULT_NAME
-$AKVCertName  = $env:AKV_CERT_NAME
+$AKVCertNames  = $env:AKV_CERT_NAME -split ', '
 $TempDir      = $env:POSHACME_HOME
 #endregion Init
 
 #region Configure
 # Get Storage Account secret from Key Vault and Subscription Id from the Function context
-Write-Host 'Getting Storage Account connection information'
+Write-Information 'Getting Storage Account connection information'
 $SasUrl = Get-AzKeyVaultSecret -VaultName $KeyVaultName -SecretName 'ACME-SAS' -AsPlainText
+
+Write-Information 'Generating Access Token using Function App MSI'
 $SubscriptionId = (Get-AzContext).Subscription.Id
+$TenantId       = (Get-AzContext).Tenant.Id
+$AzToken        = (Get-AzAccessToken -ResourceUrl "https://management.core.windows.net/" -TenantId $TenantId).Token
 
 # Create Posh-ACME config directory
 if (-not (Test-Path -Path $TempDir)) {
-    Write-Host 'Creating Posh-ACME config home'
+    Write-Information 'Creating Posh-ACME config home'
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 }
 
 # Download Posh-ACME configuration from Storage Account using AzCopy
-Write-Host "Syncing current Posh-ACME configuration from Storage Account to $TempDir"
+Write-Information "Syncing current Posh-ACME configuration from Storage Account to $TempDir"
 .\azcopy.exe sync $SasUrl $TempDir --recursive
 
+Write-Information 'Wait for AzCopy to exit before initializing Posh-ACME'
+Start-Sleep -Seconds 20
+
 # Initialize Posh-ACME
-Write-Host "Initializing PoshACME in $TempDir"
+Write-Information "Initializing Posh-ACME in $TempDir"
 Import-Module Posh-ACME -Force -Verbose
 
 try {
     # Get certificate order configuration
-    Write-Host 'Getting certificate order from synced PoshACME directory'
-    $CertOrder = Get-PAOrder
+    Write-Information 'Getting certificate orders from synced Posh-ACME directory'
+    $CertOrders = Get-PAOrder -List
 } catch {
     Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that location.'
-}
-
-if ($CertOrder) {
-    Write-Host "Got Posh-ACME certificate configuration for $($CertOrder.MainDomain). Valid until $($CertOrder.CertExpires)"
-} else {
-    Write-Error 'Unable to find certificate order configuration in Posh-ACME home directory'
 }
 #endregion Configure
 
 #region Renew
-if ((Get-Date $CertOrder.RenewAfter) -le (Get-Date)) {
-    # Get Azure Key Vault certificate file
-    Write-Host "Certificate is ready for renewal as of $([datetime]$CertOrder.RenewAfter). Renewing certificate..."
-    $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName
-
-    if ($AKVCert.Thumbprint -eq (Get-PACertificate).Thumbprint) {
-        Write-Host "Certificate is $($CertOrder.status). Submitting renewal for $($CertOrder.MainDomain) certificate with thumbprint: $((Get-PACertificate).Thumbprint)"
-        $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AZUseIMDS = $true }
-    } elseif (-not $AKVCert) {
-        Write-Error "Azure Key Vault certificate not found. Please investigate."
+foreach ($CertOrder in $CertOrders) {
+    if ($CertOrder) {
+        Write-Information "Got Posh-ACME certificate configuration for $($CertOrder.MainDomain). Valid until $($CertOrder.CertExpires)"
+        if ($CertOrder.MainDomain -like 'www*') {
+            $AKVCertName = $AKVCertNames | Where-Object { $_ -like 'www*' }
+        } else {
+            $AKVCertName = $AKVCertNames | Where-Object { $_ -notlike 'www*' }
+        }
     } else {
-        Write-Host "AKV: $($AKVCert.Thumbprint)"
-        Write-Host "ACME: $((Get-PACertificate).Thumbprint)"
-        Write-Error 'Azure Key Vault certificate thumbprint does not match Posh-ACME certificate thumbprint. Investigate and eliminate the inconsistency.'
+        Write-Error 'Unable to find certificate order configuration in Posh-ACME home directory'
     }
 
-    if ($NewCert -and $AKVCert.Thumbprint -ne $NewCert.Thumbprint) {
-        # Set certificate file information for Key Vault import
-        $ServerName  = ([system.uri](Get-PAServer).location).host
-        $AccountName = (Get-PAAccount).id
-        $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
+    if ((Get-Date $CertOrder.RenewAfter) -le (Get-Date)) {
+        # Get Azure Key Vault certificate file
+        Write-Information "Certificate is ready for renewal as of $([datetime]$CertOrder.RenewAfter). Renewing certificate..."
+        $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName
 
-        Write-Host "Importing updated certificate to Azure Key Vault with thumbprint: $($NewCert.Thumbprint)"
-        Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
+        if ($AKVCert.Thumbprint -eq (Get-PACertificate).Thumbprint) {
+            Write-Information "Certificate is $($CertOrder.status). Submitting renewal for $($CertOrder.MainDomain) certificate with thumbprint: $((Get-PACertificate).Thumbprint)"
+            $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AzAccessToken = $AzToken } -Verbose
+        } elseif (-not $AKVCert) {
+            Write-Error "Azure Key Vault certificate not found. Please investigate."
+        } else {
+            Write-Information "AKV: $($AKVCert.Thumbprint)"
+            Write-Information "ACME: $((Get-PACertificate).Thumbprint)"
+            Write-Error 'Azure Key Vault certificate thumbprint does not match Posh-ACME certificate thumbprint. Investigate and eliminate the inconsistency.'
+        }
 
-        Write-Host 'Syncing updated Posh-ACME configuration to Storage Account.'
-        ./AzCopy.exe sync $TempDir $SasUrl --recursive
-        Write-Host 'Sync to Storage Account successful. Complete.'
-    } elseif (-not $NewCert) {
-        Write-Error 'New certificate was not successfully generated by Posh-ACME'
+        if ($NewCert -and $AKVCert.Thumbprint -ne $NewCert.Thumbprint) {
+            # Set certificate file information for Key Vault import
+            $ServerName  = ([system.uri](Get-PAServer).location).host
+            $AccountName = (Get-PAAccount).id
+            $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
+
+            Write-Information "Importing updated certificate to Azure Key Vault with thumbprint: $($NewCert.Thumbprint)"
+            Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
+
+            Write-Information 'Syncing updated Posh-ACME configuration to Storage Account.'
+            ./AzCopy.exe sync $TempDir $SasUrl --recursive
+            Write-Information 'Sync to Storage Account successful. Complete.'
+        } elseif (-not $NewCert) {
+            Write-Error 'New certificate was not successfully generated by Posh-ACME'
+        } else {
+            Write-Information 'Azure Key Vault certificate thumbprint matches Posh-ACME certificate thumbprint. Complete.'
+        }
     } else {
-        Write-Host 'Azure Key Vault certificate thumbprint matches Posh-ACME certificate thumbprint. Complete.'
+        Write-Information "Certificate for $($CertOrder.MainDomain) is valid until $($CertOrder.CertExpires). Complete."
     }
-} else {
-    Write-Host "Certificate for $($CertOrder.MainDomain) is valid until $($CertOrder.CertExpires). Complete."
+    #endregion Renew
 }
-#endregion Renew
