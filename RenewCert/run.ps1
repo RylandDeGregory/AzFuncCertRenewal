@@ -34,10 +34,7 @@ if (-not (Test-Path -Path $TempDir)) {
 
 # Download Posh-ACME configuration from Azure Storage using AzCopy
 Write-Information "Syncing current Posh-ACME configuration from Storage Account to $TempDir"
-.\azcopy.exe sync $SasUrl $TempDir --delete-destination
-
-Write-Information 'Waiting for AzCopy to exit before initializing Posh-ACME'
-Start-Sleep -Seconds 20
+.\azcopy.exe sync $SasUrl $TempDir --delete-destination true
 
 # Initialize Posh-ACME
 Write-Information "Initializing Posh-ACME in $TempDir"
@@ -54,7 +51,7 @@ try {
 
 #region Renew
 foreach ($CertOrder in $CertOrders) {
-    Write-Information "Found LetsEncrypt certificate configuration for $($CertOrder.MainDomain). Certificate is valid until $(Get-Date $CertOrder.CertExpires)"
+    Write-Information "Found LetsEncrypt certificate configuration for $($CertOrder.MainDomain)"
 
     # Select AKV certificate name based on the domain name associated with the current LetsEncrypt certificate
     if ($CertOrder.MainDomain -like 'www*') {
@@ -92,9 +89,11 @@ foreach ($CertOrder in $CertOrders) {
             $AccountName = (Get-PAAccount).id
             $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
 
+            # Add the updated certificate to Azure Key Vault
             Write-Information "Importing updated certificate with thumbprint [$($NewCert.Thumbprint)] to Azure Key Vault"
             Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
 
+            # Upload updated certificate configuration to Azure Storage
             Write-Information 'Syncing updated Posh-ACME configuration to Storage Account'
             .\azcopy.exe sync $TempDir $SasUrl
             Write-Information 'Sync to Storage Account successful. Renewal complete.'
@@ -102,7 +101,7 @@ foreach ($CertOrder in $CertOrders) {
             Write-Error 'Certificate was not successfully renewed by Posh-ACME'
         }
     } else {
-        Write-Information "LetsEncrypt certificate for $($CertOrder.MainDomain) is valid until $($CertOrder.CertExpires). No action required for this certificate"
+        Write-Information "Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate"
     }
 }
 #endregion Renew
