@@ -42,8 +42,11 @@ The following instructions assume that you are already hosting your website with
 ### Deploy repo to a Function App
 
 1. Deploy this repository to a Function App (I used [VS Code and its Azure Functions extension](https://docs.microsoft.com/en-us/azure/azure-functions/create-first-function-vs-code-powershell)).
-1. Configure two [Application Settings](https://docs.microsoft.com/en-us/azure/azure-functions/functions-how-to-use-azure-function-app-settings?tabs=portal) in the Function App that specify the name of the Key Vault (`KEY_VAULT_NAME`) and the name of the certificate within the Key Vault (`AKV_CERT_NAME`).
-1. Enable the Function App's System Managed Identity and grant it access to the Key Vault.
+1. Configure three [Application Settings](https://docs.microsoft.com/en-us/azure/azure-functions/functions-how-to-use-azure-function-app-settings?tabs=portal) in the Function App that specify:
+    1. The name of the Key Vault (`KEY_VAULT_NAME`).
+    1. The name of the certificate within the Key Vault (`AKV_CERT_NAME`). If you are managing multiple certificates, separate their names with ', ' (comma space).
+    1. The path to the temporary Posh-ACME home directory (`POSHACME_HOME`). I chose to use `./tmp`.
+1. Enable the Function App's System Managed Identity and grant it access to the Key Vault to read secrets and manage certificates.
 
 ### Push local Posh-ACME state to Storage Account
 
@@ -57,14 +60,13 @@ The following instructions assume that you are already hosting your website with
 1. The Function App's only Function, `RenewCert`, is configured with a [timer trigger](https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=powershell) that executes the Function once per week. You can also [execute the function at-will from the VS Code extension](https://docs.microsoft.com/en-us/azure/azure-functions/functions-develop-vs-code?tabs=csharp#run-functions-in-azure).
 1. If everything is configured correctly, the Function will:
     1. Get the Storage Account SAS URL from Azure Key Vault.
-    1. Check if AzCopy is installed in the Function App. If it isn't, install it.
     1. Use AzCopy to copy the Posh-ACME state from the `acme` Blob container to the Function App.
-    1. Use Posh-ACME to check if the certificate needs to be renewed:
+    1. Use Posh-ACME to check if the certificate(s) need to be renewed:
         * If it does:
-            * Renew the certificate using Posh-ACME.
-            * Add the updated certificate to Azure Key Vault (overwriting the expired certificate).
+            * Renew the certificate(s) using Posh-ACME.
+            * Add the updated certificate(s) to Azure Key Vault (overwriting the expired certificate(s)).
             * Push the updated Posh-ACME state from the Function App to the `acme` Blob container.
-            * The CDN will automatically pull and deploy the `latest` version of the certificate.
+            * The CDN will automatically pull and deploy the `latest` version of the certificate(s).
         * If it does not, do nothing.
 
 ## Thanks
