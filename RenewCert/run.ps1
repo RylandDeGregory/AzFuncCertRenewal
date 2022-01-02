@@ -75,7 +75,7 @@ foreach ($CertOrder in $CertOrders) {
             Write-Information "Certificate is $($CertOrder.status). Submitting renewal for certificate with thumbprint: $($LECert.Thumbprint)"
 
             # Renew the certificate using Posh-ACME and the Azure DNS plugin
-            $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AzAccessToken = $AzToken } -Verbose
+            $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AzAccessToken = $AzToken } -MainDomain $CertOrder.MainDomain -Verbose
         } elseif (-not $AKVCert) {
             Write-Error "Azure Key Vault certificate with name $AKVCertName was not found in Key Vault $KeyVaultName"
         } else {
