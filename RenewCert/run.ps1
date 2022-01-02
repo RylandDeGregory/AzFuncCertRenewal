@@ -68,7 +68,7 @@ foreach ($CertOrder in $CertOrders) {
         $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName
 
         # Get LetsEncrypt certificate object
-        $LECert = Get-PACertificate
+        $LECert = Get-PACertificate -MainDomain $CertOrder.MainDomain
 
         # Ensure that the AKV certificate matches the LetsEncrypt certificate synced from Azure Storage
         if ($AKVCert.Thumbprint -eq $LECert.Thumbprint) {
