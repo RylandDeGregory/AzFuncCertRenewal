@@ -60,15 +60,15 @@ foreach ($CertOrder in $CertOrders) {
         $AKVCertName = $AKVCertNames | Where-Object { $_ -notlike 'www*' }
     }
 
+    # Get Azure Key Vault certificate object
+    $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName
+
+    # Get LetsEncrypt certificate object
+    $LECert = Get-PACertificate -MainDomain $CertOrder.MainDomain
+
     # Check if the LetsEncrypt certificate is available for renewal
     if ((Get-Date $CertOrder.RenewAfter) -le (Get-Date)) {
         Write-Information "Certificate is ready for renewal as of $(Get-Date $CertOrder.RenewAfter). Renewing certificate..."
-
-        # Get Azure Key Vault certificate object
-        $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName
-
-        # Get LetsEncrypt certificate object
-        $LECert = Get-PACertificate -MainDomain $CertOrder.MainDomain
 
         # Ensure that the AKV certificate matches the LetsEncrypt certificate synced from Azure Storage
         if ($AKVCert.Thumbprint -eq $LECert.Thumbprint) {
@@ -100,6 +100,15 @@ foreach ($CertOrder in $CertOrders) {
         } elseif (-not $NewCert) {
             Write-Error 'Certificate was not successfully renewed by Posh-ACME'
         }
+    } elseif ($AKVCert.Thumbprint -ne $LECert.Thumbprint) {
+        # Set certificate file information for Key Vault import
+        $ServerName  = ([system.uri](Get-PAServer).location).host
+        $AccountName = (Get-PAAccount).id
+        $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
+
+        # Add the updated certificate to Azure Key Vault
+        Write-Information "Importing certificate with thumbprint [$($NewCert.Thumbprint)] to Azure Key Vault"
+        Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
     } else {
         Write-Information "Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate"
     }
