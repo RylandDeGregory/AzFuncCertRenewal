@@ -107,8 +107,8 @@ foreach ($CertOrder in $CertOrders) {
         $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
 
         # Add the updated certificate to Azure Key Vault
-        Write-Information "Importing certificate with thumbprint [$($NewCert.Thumbprint)] to Azure Key Vault"
-        Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
+        Write-Information "Importing certificate with thumbprint [$($LECert.Thumbprint)] to Azure Key Vault"
+        Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $LECert.PfxPass
     } else {
         Write-Information "Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate"
     }
