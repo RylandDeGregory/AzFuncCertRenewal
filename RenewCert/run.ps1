@@ -89,14 +89,18 @@ foreach ($CertOrder in $CertOrders) {
             $AccountName = (Get-PAAccount).id
             $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
 
-            # Add the updated certificate to Azure Key Vault
-            Write-Information "Importing updated certificate with thumbprint [$($NewCert.Thumbprint)] to Azure Key Vault"
-            Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
+            if (Test-Path $CertFile) {
+                # Add the updated certificate to Azure Key Vault
+                Write-Information "Importing updated certificate [$CertFile] with thumbprint [$($NewCert.Thumbprint)] to Azure Key Vault"
+                Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
 
-            # Upload updated certificate configuration to Azure Storage
-            Write-Information 'Syncing updated Posh-ACME configuration to Storage Account'
-            .\azcopy.exe sync $TempDir $SasUrl
-            Write-Information 'Sync to Storage Account successful. Renewal complete.'
+                # Upload updated certificate configuration to Azure Storage
+                Write-Information 'Syncing updated Posh-ACME configuration to Storage Account'
+                .\azcopy.exe sync $TempDir $SasUrl
+                Write-Information 'Sync to Storage Account successful. Renewal complete.'
+            } else {
+                Write-Error "Certificate [$CertFile] is not valid for import to Azure Key Vault"
+            }
         } elseif (-not $NewCert) {
             Write-Error 'Certificate was not successfully renewed by Posh-ACME'
         }
