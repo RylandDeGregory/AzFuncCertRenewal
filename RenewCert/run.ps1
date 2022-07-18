@@ -67,7 +67,7 @@ foreach ($CertOrder in $CertOrders) {
     $LECert = Get-PACertificate -MainDomain $CertOrder.MainDomain
 
     # Check if the LetsEncrypt certificate is available for renewal
-    if ((Get-Date $CertOrder.RenewAfter) -le (Get-Date)) {
+    if ($CertOrder.RenewAfter -and ((Get-Date $CertOrder.RenewAfter) -le (Get-Date))) {
         Write-Information "Certificate is ready for renewal as of $(Get-Date $CertOrder.RenewAfter). Renewing certificate..."
 
         # Ensure that the AKV certificate matches the LetsEncrypt certificate synced from Azure Storage
@@ -113,6 +113,8 @@ foreach ($CertOrder in $CertOrders) {
         # Add the updated certificate to Azure Key Vault
         Write-Information "Importing certificate with thumbprint [$($LECert.Thumbprint)] to Azure Key Vault"
         Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $LECert.PfxPass
+    } elseif (-not $CertOrder.RenewAfter) {
+        Write-Error "Certificate for $($CertOrder.MainDomain) does not have a 'RenewAfter' value. Please confirm that the Storage Account and Function App state are in sync"
     } else {
         Write-Information "Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate"
     }
