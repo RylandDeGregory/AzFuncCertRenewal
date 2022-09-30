@@ -119,4 +119,5 @@ foreach ($CertOrder in $CertOrders) {
         Write-Information "Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate"
     }
 }
+Write-Information "Complete."
 #endregion Renew
