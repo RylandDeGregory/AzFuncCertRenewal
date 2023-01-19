@@ -19,6 +19,8 @@ $TenantId       = (Get-AzContext).Tenant.Id
 
 #region Configure
 # Get Storage Account secret from Key Vault
+# TODO: Update to use Managed Identity login
+# https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-authorize-azure-active-directory#authorize-a-managed-identity
 Write-Information 'Getting Storage Account connection information'
 $SasUrl = Get-AzKeyVaultSecret -VaultName $KeyVaultName -SecretName 'ACME-SAS' -AsPlainText
 
