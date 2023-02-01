@@ -30,7 +30,7 @@ if (-not (Test-Path -Path $TempDir)) {
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 }
 
-# Download Posh-ACME configuration from Azure Storage using AzCopy
+# Download Posh-ACME configuration from Azure Storage
 Write-Information "Sync current Posh-ACME configuration from Storage Account [$StorageAccountName] to $TempDir"
 Get-AzStorageBlob -Context $StorageCtx -Container $BlobContainerName | ForEach-Object {
     Get-AzStorageBlobContent -Context $StorageCtx -Container $BlobContainerName -Blob $_.Name -Destination $TempDir
@@ -112,5 +112,9 @@ foreach ($CertOrder in $CertOrders) {
         Write-Information "Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate"
     }
 }
+
+# Remove Posh-ACME configuration files from local storage
+Remove-Item -Path $TempDir -Force
+
 Write-Information 'Complete.'
 #endregion Process
