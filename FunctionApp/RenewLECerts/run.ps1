@@ -33,7 +33,7 @@ if (-not (Test-Path -Path $TempDir)) {
 # Download Posh-ACME configuration from Azure Storage using AzCopy
 Write-Information "Sync current Posh-ACME configuration from Storage Account [$StorageAccountName] to $TempDir"
 Get-AzStorageBlob -Context $StorageCtx -Container $BlobContainerName | ForEach-Object {
-    Get-AzStorageBlobContent -Context $StorageCtx -Container $BlobContainerName -CloudBlob $_.ICloudBlob -Destination $TempDir
+    Get-AzStorageBlobContent -Context $StorageCtx -Container $BlobContainerName -Blob $_.Name -Destination $TempDir
 }
 
 # Initialize Posh-ACME
