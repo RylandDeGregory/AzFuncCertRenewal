@@ -57,10 +57,10 @@ resource storageBlobContributorRole 'Microsoft.Authorization/roleDefinitions@202
   name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 }
 
-@description('Built-in Key Vault Secrets User role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#key-vault-secrets-user')
-resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+@description('Built-in Key Vault Certificates Officer role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#key-vault-certificates-officer')
+resource keyVaultCertificatesOfficerRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   scope: subscription()
-  name: '4633458b-17de-408a-b874-0445c86b69e6'
+  name: 'a4417e6f-fecd-4de8-b567-7b0420556985'
 }
 
 // RBAC Role assignments
@@ -75,12 +75,12 @@ resource funcMIBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-@description('Allows Function App Managed Identity to use Key Vault Secrets')
+@description('Allows Function App Managed Identity to manage Key Vault Certificates')
 resource funcMIVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(func.id, kv.id, keyVaultSecretsUserRole.id)
+  name: guid(func.id, kv.id, keyVaultCertificatesOfficerRole.id)
   scope: kv
   properties: {
-    roleDefinitionId: keyVaultSecretsUserRole.id
+    roleDefinitionId: keyVaultCertificatesOfficerRole.id
     principalId: func.identity.principalId
     principalType: 'ServicePrincipal'
   }
