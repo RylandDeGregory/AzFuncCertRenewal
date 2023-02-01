@@ -6,5 +6,6 @@
     # To use the Az module in your function app, please uncomment the line below.
     'Az.Accounts' = '2.*'
     'Az.KeyVault' = '4.*'
+    'Az.Storage' = '5.*'
     'Posh-Acme' = '4.*'
 }
