@@ -113,7 +113,7 @@ foreach ($CertOrder in $CertOrders) {
     }
 }
 
-Write-Information "Remove Posh-ACME configuration files from local directory [$Tempdir]"
+Write-Information "Remove Posh-ACME configuration files from local directory [$TempDir]"
 Remove-Item -Path $TempDir -Recurse -Force
 
 Write-Information 'Complete.'
