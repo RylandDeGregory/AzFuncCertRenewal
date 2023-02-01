@@ -18,7 +18,7 @@ $SubscriptionId = (Get-AzContext).Subscription.Id
 
 #region Configure
 # Create Azure Storage Context
-$StorageCtx = New-AzStorageContext -StorageAccountName $StorageAccount -UseConnectedAccount
+$StorageCtx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
 
 # Generate an ARM OAuth Token for use by Posh-ACME with the Azure DNS plugin
 Write-Information 'Generate ARM Access Token using Function App MSI'
