@@ -136,9 +136,19 @@ resource st 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   }
 }
 
-resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' existing = {
+resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' = {
   name: 'default'
   parent: st
+  properties: {
+    containerDeleteRetentionPolicy: {
+      enabled: true
+      days: 30
+    }
+    deleteRetentionPolicy: {
+      enabled: true
+      days: 14
+    }
+  }
 }
 
 resource stBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
