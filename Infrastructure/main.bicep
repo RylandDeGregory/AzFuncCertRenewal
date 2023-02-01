@@ -136,6 +136,7 @@ resource st 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   }
 }
 
+// Enable Blob Soft Delete
 resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' = {
   name: 'default'
   parent: st
@@ -151,6 +152,7 @@ resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' = {
   }
 }
 
+// Blob Container
 resource stBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
   name: blobContainerName
   parent: stBlob
