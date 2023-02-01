@@ -7,7 +7,6 @@ $ErrorActionPreference = 'Stop'
 
 # Get variables from Function App Settings
 $KeyVaultName       = $env:KEY_VAULT_NAME
-$AKVCertNames       = ($env:AKV_CERT_NAME).Split(',').Trim()
 $TempDir            = $env:POSHACME_HOME
 $StorageAccountName = $env:STORAGE_ACCOUNT_NAME
 $BlobContainerName  = $env:BLOB_CONTAINER_NAME

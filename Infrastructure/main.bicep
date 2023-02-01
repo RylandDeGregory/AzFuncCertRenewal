@@ -28,9 +28,6 @@ param functionAppName string = 'func-lecertrenew-${uniqueSuffix}'
 @description('Key Vault name. Default: kv-lecertrenew-$<uniqueSuffix>')
 param keyVaultName string = 'kv-lecertrenew-${uniqueSuffix}'
 
-@description('Lets Encrypt SSL certificate name(s) within Azure Key Vault. Accepts single value or multiple comma-separated values')
-param keyVaultCertNames string
-
 // Default logging policy for all resources
 var defaultLogOrMetric = {
   enabled: logsEnabled
@@ -251,10 +248,6 @@ resource func 'Microsoft.Web/sites@2022-03-01' = {
         {
           name: 'KEY_VAULT_NAME'
           value: kv.name
-        }
-        {
-          name: 'AKV_CERT_NAME'
-          value: keyVaultCertNames
         }
         {
           name: 'STORAGE_ACCOUNT_NAME'
