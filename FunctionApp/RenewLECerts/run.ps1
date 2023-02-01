@@ -20,17 +20,14 @@ $SubscriptionId = (Get-AzContext).Subscription.Id
 # Create Azure Storage Context
 $StorageCtx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
 
-# Generate an ARM OAuth Token for use by Posh-ACME with the Azure DNS plugin
 Write-Information 'Generate ARM Access Token using Function App MSI'
 $AzToken = (Get-AzAccessToken -ResourceTypeName ResourceManager).Token
 
-# Create Posh-ACME config directory if it does not exist
 if (-not (Test-Path -Path $TempDir)) {
     Write-Information "Create Posh-ACME home directory [$TempDir]"
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 }
 
-# Download Posh-ACME configuration from Azure Storage
 Write-Information "Sync current Posh-ACME configuration from Storage Account [$StorageAccountName] to $TempDir"
 Get-AzStorageBlob -Context $StorageCtx -Container $BlobContainerName | ForEach-Object {
     Get-AzStorageBlobContent -Context $StorageCtx -Container $BlobContainerName -Blob $_.Name -Destination $TempDir
@@ -41,11 +38,17 @@ Write-Information "Initialize Posh-ACME in $TempDir"
 Import-Module Posh-ACME -Force -Verbose
 
 try {
-    # Get LetsEncrypt certificate order configuration
     Write-Information 'Get certificate orders from synced Posh-ACME directory'
     $CertOrders = Get-PAOrder -List
 } catch {
     Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that location'
+}
+
+try {
+    Write-Information 'Get certificates from Azure Key Vault'
+    $AKVCerts = Get-AzKeyVaultCertificate -VaultName $KeyVaultName | ForEach-Object { Get-AzKeyVaultCertificate -VaultName $_.VaultName -Name $_.Name }
+} catch {
+    Write-Error "Error getting certificates from Azure Key Vault [$KeyVaultName]: $_"
 }
 #endregion Configure
 
@@ -53,11 +56,8 @@ try {
 foreach ($CertOrder in $CertOrders) {
     Write-Information "Get LetsEncrypt certificate configuration for $($CertOrder.MainDomain)"
 
-    # Select AKV certificate name based on the domain name associated with the current LetsEncrypt certificate
-    $AKVCertName = $AKVCertNames | Where-Object { $_ -eq $CertOrder.MainDomain.Replace('.', '') }
-
-    # Get Azure Key Vault certificate object
-    $AKVCert = Get-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName
+    # Select AKV certificate based on the domain name associated with the current LetsEncrypt certificate
+    $AKVCert = $AKVCerts | Where-Object { $_.Certificate.Subject.Replace('CN=','') -eq $CertOrder.MainDomain }
 
     # Get LetsEncrypt certificate object
     $LECert = Get-PACertificate -MainDomain $CertOrder.MainDomain
@@ -103,7 +103,6 @@ foreach ($CertOrder in $CertOrders) {
         $AccountName = (Get-PAAccount).id
         $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')
 
-        # Add the updated certificate to Azure Key Vault
         Write-Information "Import certificate with thumbprint [$($LECert.Thumbprint)] to Azure Key Vault"
         Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $LECert.PfxPass
     } elseif (-not $CertOrder.RenewAfter) {
