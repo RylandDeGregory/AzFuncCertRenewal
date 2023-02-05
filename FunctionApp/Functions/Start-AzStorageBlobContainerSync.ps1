@@ -29,7 +29,7 @@ function Start-AzStorageBlobContainerSync {
             $LiteralPath += $Separator
         }
 
-        $BlobHash = Get-AzStorageBlob -Context $Context -Container $Container - | ForEach-Object {
+        $BlobHash = Get-AzStorageBlob -Context $Context -Container $Container | ForEach-Object {
             $_.ICloudBlob.FetchAttributes()
             [PSCustomObject]@{
                 Name       = $_.Name
@@ -39,11 +39,11 @@ function Start-AzStorageBlobContainerSync {
         } | Sort-Object -Property Name
         Write-Verbose "Got MD5 Hash for [$($BlobHash.Count)] Azure Storage Blobs"
 
-        $FilePath = Join-Path $LiteralPath $Container
+        $FilePath = Join-Path $LiteralPath $Container $Separator
         $FileHash = Get-ChildItem -Path $FilePath -Recurse -File | ForEach-Object {
             $Hash = Get-FileHash -Path $_.FullName -Algorithm MD5 | Select-Object -ExpandProperty Hash
             [PSCustomObject]@{
-                Name       = $_.FullName.Split($LiteralPath)[1]
+                Name       = $_.FullName.Split($FilePath)[1]
                 ContentMD5 = [system.convert]::ToBase64String([system.convert]::FromHexString($Hash))
                 HexMD5     = $Hash
             }
@@ -58,7 +58,7 @@ function Start-AzStorageBlobContainerSync {
             $RelativeFilePath = $FileHash | Where-Object { $_.Name -eq $FileName } | Select-Object -ExpandProperty Name
             $FilePath = "$($LiteralPath)$RelativeFilePath"
             Write-Verbose "Upload file [$FilePath] to Azure Storage Blob Container [$Container] as [$FileName]"
-            Set-AzStorageBlobContent -Context $Context -Container $Container -Blob $FileName -File $FilePath -Force -WhatIf
+            Set-AzStorageBlobContent -Context $Context -Container $Container -Blob $FileName -File $FilePath -Force
         }
 
         if ($DiffFiles.Count -gt 0) {

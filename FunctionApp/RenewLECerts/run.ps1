@@ -2,6 +2,7 @@
 param($Timer)
 
 # Session configuration
+$ProgressPreference    = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 
 # Set variables from Function App Settings
@@ -12,6 +13,10 @@ $BlobContainerName  = $env:BLOB_CONTAINER_NAME
 
 # Get Subscription ID from MSI context
 $SubscriptionId = (Get-AzContext).Subscription.Id
+
+# Import helper function from file
+$HelperFunctionFilePath = Join-Path '..' 'Functions' 'Start-AzStorageBlobContainerSync.ps1'
+. $HelperFunctionFilePath
 #endregion Init
 
 #region Configure
@@ -93,7 +98,7 @@ foreach ($CertOrder in $CertOrders) {
                 Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
 
                 Write-Information 'Sync updated Posh-ACME configuration to Storage Account'
-                Start-AzBlobContainerSync -Context $StorageCtx -Container $BlobContainerName -LiteralPath $TempDir
+                Start-AzStorageBlobContainerSync -Context $StorageCtx -Container $BlobContainerName -LiteralPath $TempDir -Verbose
             } else {
                 Write-Error "Certificate [$CertFile] is not valid for import to Azure Key Vault"
             }
