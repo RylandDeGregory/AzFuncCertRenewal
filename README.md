@@ -2,7 +2,7 @@
 
 - Let's Encrypt ACME certificate renewal using [Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell?tabs=portal) and PowerShell ([Posh-ACME](https://github.com/rmbolger/Posh-ACME)).
 - Domain verification is performed automatically by Posh-ACME using its [Azure DNS plugin](https://poshac.me/docs/v4/Plugins/Azure/) and the Function App's [System-Assigned Managed Identity](https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity?tabs=dotnet#add-a-system-assigned-identity).
-- Updated certificate is automatically imported to [Azure Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/certificates/certificate-scenarios) as a new version of the existing certificate.
+- Upon renewal, updated certificate is automatically imported to [Azure Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/certificates/certificate-scenarios) as a new version of the existing certificate.
 - Posh-ACME state is maintained in an [Azure Storage Account](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview) [Blob container](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction), and kept in sync with the Function App using Azure PowerShell.
 
 ## Setup
@@ -26,7 +26,7 @@ The following instructions assume that you are using [Azure DNS](https://learn.m
 
 This application can be deployed to Azure by clicking the Deploy to Azure button below. **NOTE:** Your Azure DNS Zone must be in a Resource Group in the same Subscription as the Resource Group you are deploying to.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FRylandDeGregory%2FAzFuncCertRenewal%2Fmaster%2FInfrastructure%2Fmain.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FRylandDeGregory%2FAzFuncCertRenewal%2Fmain%2FInfrastructure%2Fmain.json)
 
 This application can also be deployed to Azure programmatically using [Azure PowerShell](https://learn.microsoft.com/en-us/powershell/module/az.resources/new-azresourcegroupdeployment) or the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/group/deployment?view=azure-cli-latest#az-group-deployment-create).
 
@@ -46,7 +46,7 @@ Using the [Azure Storage Explorer](https://learn.microsoft.com/en-us/azure/vs-az
 
 ### Function App
 
-1. The Function App's only Function, `RenewCert`, is configured with a [timer trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=powershell) that executes the Function once per week. You can also [execute the function at-will from the VS Code extension](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-vs-code?tabs=csharp#run-functions-in-azure).
+1. The Function App's only Function, `RenewLECerts`, is configured with a [timer trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=powershell) that executes the Function once per week. You can also [execute the function at-will from the VS Code extension](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-vs-code?tabs=csharp#run-functions-in-azure).
 1. If everything is configured correctly, the Function will:
     1. Create a Storage Account Context using the Function App's MSI.
     1. Use Azure PowerShell to copy the Posh-ACME state from a Blob Container to the Function App.
