@@ -261,7 +261,7 @@ resource func 'Microsoft.Web/sites@2022-03-01' = {
         }
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: 'https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/main/FunctionApp.zip?raw=true'
+          value: 'https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/main/src.zip?raw=true'
         }
         {
           name: 'KEY_VAULT_NAME'
