@@ -1,4 +1,10 @@
 function Start-AzStorageBlobContainerSync {
+    <#
+        .SYNOPSIS
+            Synchronize filesystem changes in a local directory to an Azure Storage blob container.
+        .NOTES
+            File changes are detected by differences in ContentMD5 value between a local file and the Azure blob with the same name.
+    #>
     [CmdletBinding()]
     [OutputType([Int])]
     param (
@@ -48,7 +54,7 @@ function Start-AzStorageBlobContainerSync {
         Write-Verbose "[$($DiffFiles.Count)] local files have been updated. Uploading to Azure Storage container [$Container]"
 
         $DiffFiles | ForEach-Object {
-            $FileName = $PSItem.Name
+            $FileName = $_.Name
             $RelativeFilePath = $FileHash | Where-Object { $_.Name -eq $FileName } | Select-Object -ExpandProperty Name
             $FilePath = "$($LiteralPath)$RelativeFilePath"
             Write-Verbose "Upload file [$FilePath] to Azure Storage Blob Container [$Container] as [$FileName]"

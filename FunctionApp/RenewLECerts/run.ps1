@@ -4,7 +4,7 @@ param($Timer)
 # Session configuration
 $ErrorActionPreference = 'Stop'
 
-# Get variables from Function App Settings
+# Set variables from Function App Settings
 $KeyVaultName       = $env:KEY_VAULT_NAME
 $TempDir            = $env:POSHACME_HOME
 $StorageAccountName = $env:STORAGE_ACCOUNT_NAME
@@ -31,7 +31,6 @@ Get-AzStorageBlob -Context $StorageCtx -Container $BlobContainerName | ForEach-O
     Get-AzStorageBlobContent -Context $StorageCtx -Container $BlobContainerName -Blob $_.Name -Destination $TempDir
 }
 
-# Initialize Posh-ACME
 Write-Information "Initialize Posh-ACME in $TempDir"
 Import-Module Posh-ACME -Force -Verbose
 
@@ -63,7 +62,6 @@ foreach ($CertOrder in $CertOrders) {
     $AKVCertName = $CertOrder.MainDomain.Replace('.','-')
     $AKVCert = $AKVCerts | Where-Object { $_.Certificate.Subject.Replace('CN=','') -eq $CertOrder.MainDomain }
 
-    # Import LetsEncrypt cert to AKV if it does not exist
     if (-not $AKVCert) {
         Write-Information "No Azure Key Vault certificate exists for [$($CertOrder.MainDomain)]. Importing certificate from Posh-ACME configuration"
         $AKVCert = Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $(ConvertTo-SecureString -String $CertOrder.PfxPass -AsPlainText -Force)
