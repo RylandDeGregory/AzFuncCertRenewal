@@ -40,7 +40,7 @@ az group deployment create --resource-group 'testing' --template-file ./Infrastr
 
 ### Add Posh-ACME config to Storage Account
 
-Using the [Azure Storage Explorer](https://learn.microsoft.com/en-us/azure/vs-azure-tools-storage-manage-with-storage-explorer), add the content of your local `$env:POSHACME_HOME` directory to the `acme` container within the Storage Account that was created as part of the [Infrastructure](#infrastructure) deployment.
+Using the [Azure Storage Explorer](https://learn.microsoft.com/en-us/azure/vs-azure-tools-storage-manage-with-storage-explorer), upload the content of your local `$env:POSHACME_HOME` directory to the `acme` container within the Storage Account that was created as part of the [Infrastructure](#infrastructure) deployment.
 
 <img width="656" alt="Storage Explorer" src="https://user-images.githubusercontent.com/18073815/216796822-cb05a5b2-701b-4544-9b50-a2f4a76a1980.png">
 
