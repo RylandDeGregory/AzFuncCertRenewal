@@ -28,10 +28,10 @@ param functionAppName string = 'func-lecertrenew-${uniqueSuffix}'
 @description('Key Vault name. Default: kv-lecertrenew-$<uniqueSuffix>')
 param keyVaultName string = 'kv-lecertrenew-${uniqueSuffix}'
 
-@description('DNS Zone Resource Group name. Default: resourceGroup().name')
+@description('Existing DNS Zone Resource Group name. Default: resourceGroup().name')
 param dnsZoneResourceGroupName string = resourceGroup().name
 
-@description('DNS Zone name')
+@description('Existing DNS Zone name (should match domain name)')
 param dnsZoneName string
 
 // Default logging policy for all resources

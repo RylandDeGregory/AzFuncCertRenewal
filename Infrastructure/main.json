@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.13.1.58284",
-      "templateHash": "15765394807006986698"
+      "templateHash": "11522326721067171121"
     }
   },
   "parameters": {
@@ -83,13 +83,13 @@
       "type": "string",
       "defaultValue": "[resourceGroup().name]",
       "metadata": {
-        "description": "DNS Zone Resource Group name. Default: resourceGroup().name"
+        "description": "Existing DNS Zone Resource Group name. Default: resourceGroup().name"
       }
     },
     "dnsZoneName": {
       "type": "string",
       "metadata": {
-        "description": "DNS Zone name"
+        "description": "Existing DNS Zone name (should match domain name)"
       }
     }
   },
