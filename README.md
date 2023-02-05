@@ -24,11 +24,11 @@ The following instructions assume that you are using [Azure DNS](https://learn.m
 
 ### Infrastructure
 
-This application can be deployed to Azure by clicking the Deploy to Azure button below.
+This application can be deployed to Azure by clicking the Deploy to Azure button below. **NOTE:** Your Azure DNS Zone must be in a Resource Group in the same Subscription as the Resource Group you are deploying to.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FRylandDeGregory%2FAzFuncCertRenewal%2Fmaster%2FInfrastructure%2Fmain.json)
 
-This application can also be deployed to Azure programmatically using the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/group/deployment?view=azure-cli-latest#az-group-deployment-create) or [Azure PowerShell](https://learn.microsoft.com/en-us/powershell/module/az.resources/new-azresourcegroupdeployment).
+This application can also be deployed to Azure programmatically using [Azure PowerShell](https://learn.microsoft.com/en-us/powershell/module/az.resources/new-azresourcegroupdeployment) or the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/group/deployment?view=azure-cli-latest#az-group-deployment-create).
 
 ```PowerShell
 # Azure PowerShell
