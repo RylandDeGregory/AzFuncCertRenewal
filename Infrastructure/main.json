@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.13.1.58284",
-      "templateHash": "8760060196876143785"
+      "templateHash": "1178816172247717900"
     }
   },
   "parameters": {
@@ -343,7 +343,7 @@
             },
             {
               "name": "WEBSITE_RUN_FROM_PACKAGE",
-              "value": "https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/master/FunctionApp.zip?raw=true"
+              "value": "https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/main/FunctionApp.zip?raw=true"
             },
             {
               "name": "KEY_VAULT_NAME",
