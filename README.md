@@ -1,74 +1,71 @@
 # Serverless Let's Encrypt certificate renewal on Azure
 
-- Let's Encrypt ACME certificate renewal using [Azure Functions](https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell?tabs=portal) and PowerShell ([Posh-ACME](https://github.com/rmbolger/Posh-ACME)).
-- Domain verification is performed automatically by Posh-ACME using its [Azure DNS plugin](https://github.com/rmbolger/Posh-ACME/blob/main/Posh-ACME/Plugins/Azure-Readme.md) and the Function App's [System-Assigned Managed Identity](https://docs.microsoft.com/en-us/azure/app-service/overview-managed-identity?tabs=dotnet#add-a-system-assigned-identity).
-- Updated certificate is automatically imported to [Azure Key Vault](https://docs.microsoft.com/en-us/azure/key-vault/certificates/certificate-scenarios) as a new version of the existing certificate.
-    - Azure CDN custom domain is configured to point to the `latest` version of the certificate in Azure Key Vault, so it is automatically rotated when the certificate is renewed.
-- Posh-ACME state is maintained by an [Azure Storage Account](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-overview) [Blob container](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) and [AzCopy](https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10).
+- Let's Encrypt ACME certificate renewal using [Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell?tabs=portal) and PowerShell ([Posh-ACME](https://github.com/rmbolger/Posh-ACME)).
+- Domain verification is performed automatically by Posh-ACME using its [Azure DNS plugin](https://poshac.me/docs/v4/Plugins/Azure/) and the Function App's [System-Assigned Managed Identity](https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity?tabs=dotnet#add-a-system-assigned-identity).
+- Updated certificate is automatically imported to [Azure Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/certificates/certificate-scenarios) as a new version of the existing certificate.
+- Posh-ACME state is maintained in an [Azure Storage Account](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview) [Blob container](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction), and kept in sync with the Function App using Azure PowerShell.
 
-## Getting Started
+## Setup
 
-The following instructions assume that you are already hosting your website with [Azure CDN](https://docs.microsoft.com/en-us/azure/cdn/cdn-overview) and using [Azure DNS](https://docs.microsoft.com/en-us/azure/dns/dns-overview) with your domain.
+The following instructions assume that you are using [Azure DNS](https://learn.microsoft.com/en-us/azure/dns/dns-overview) with your domain. If you are not, follow the Microsoft documentation to set up an Azure DNS Zone for your domain. [Tutorial: Host your domain in Azure DNS](https://learn.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns).
 
-### Setup
+### Installation
 
-1. Create a Key Vault and Storage Account (if you don't already have one).
 1. Install the [Posh-ACME PowerShell module](https://www.powershellgallery.com/packages/Posh-ACME/4.5.0) on your workstation.
 1. Clone this git repository to your workstation.
+1. Deploy required Azure resources using the steps in the [Infrastructure](#infrastructure) section of this document.
 
 ### Generate a certificate locally
 
-1. Configure your Posh-ACME environment by following the module's [tutorial](https://github.com/rmbolger/Posh-ACME/blob/main/Tutorial.md).
-1. Generate a certificate locally by following the module's [Azure Readme](https://github.com/rmbolger/Posh-ACME/blob/main/Posh-ACME/Plugins/Azure-Readme.md).
+1. Configure your Posh-ACME environment by following the module's [tutorial](https://poshac.me/docs/v4/Tutorial/).
+1. Generate a certificate locally by following the module's [Azure tutorial](https://poshac.me/docs/v4/Plugins/Azure/).
 
-### Add the certificate to Azure Key Vault
+## Usage
 
-1. Import the newly-generated certificate's `fullchain.pfx` file to Azure Key Vault. You can get the password by executing the following command:
+### Infrastructure
 
-```powershell
-(Get-PACertificate).pfxPass | ConvertFrom-SecureString -AsPlainText
+This application can be deployed to Azure by clicking the Deploy to Azure button below.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FRylandDeGregory%2FAzFuncCertRenewal%2Fmaster%2FInfrastructure%2Fmain.json)
+
+This application can also be deployed to Azure programmatically using the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/group/deployment?view=azure-cli-latest#az-group-deployment-create) or [Azure PowerShell](https://learn.microsoft.com/en-us/powershell/module/az.resources/new-azresourcegroupdeployment).
+
+```PowerShell
+# Azure PowerShell
+New-AzResourceGroupDeployment -ResourceGroupName 'testing' -TemplateFile ./Infrastructure/main.bicep -dnsZoneName 'my-domain.com' -Verbose
+
+# Azure CLI
+az group deployment create --resource-group 'testing' --template-file ./Infrastructure/main.bicep --parameters "{ \"dnsZoneName\": { \"value\": \"my-domain.com\" } }" --verbose
 ```
 
-<img width="718" alt="Add certificate to Azure Key Vault" src="https://user-images.githubusercontent.com/18073815/122643453-ef88c580-d0dd-11eb-887a-c8c1739ec890.png">
+### Add Posh-ACME config to Storage Account
 
+Using the [Azure Storage Explorer](https://learn.microsoft.com/en-us/azure/vs-azure-tools-storage-manage-with-storage-explorer), upload the content of your local `$env:POSHACME_HOME` directory to the `acme` container within the Storage Account that was created as part of the [Infrastructure](#infrastructure) deployment.
 
-### Configure the CDN custom domain to use the Key Vault certificate
+<img width="656" alt="Storage Explorer" src="https://user-images.githubusercontent.com/18073815/216796822-cb05a5b2-701b-4544-9b50-a2f4a76a1980.png">
 
-1. In your CDN endpoint's custom domain, select the Key Vault certificate you just imported (make sure the CDN can access the Key Vault).
+### Function App
 
-<img width="706" alt="Configure CDN to use Key Vault certificate" src="https://user-images.githubusercontent.com/18073815/122644459-3fb65680-d0e3-11eb-834f-7fe8af65afbc.png">
-
-
-### Deploy repo to a Function App
-
-1. Deploy this repository to a Function App (I used [VS Code and its Azure Functions extension](https://docs.microsoft.com/en-us/azure/azure-functions/create-first-function-vs-code-powershell)).
-1. Configure three [Application Settings](https://docs.microsoft.com/en-us/azure/azure-functions/functions-how-to-use-azure-function-app-settings?tabs=portal) in the Function App that specify:
-    1. The name of the Key Vault (`KEY_VAULT_NAME`).
-    1. The name of the certificate within the Key Vault (`AKV_CERT_NAME`). If you are managing multiple certificates, separate their names with ', ' (comma space).
-    1. The path to the temporary Posh-ACME home directory (`POSHACME_HOME`). I chose to use `./tmp`.
-1. Enable the Function App's System Managed Identity and grant it access to the Key Vault to read secrets and manage certificates.
-
-### Push local Posh-ACME state to Storage Account
-
-1. Upload the contents of the `$env:POSHACME_HOME` directory to an empty **PRIVATE** blob container called `acme`.
-1. Generate a container-level read/write [SAS URL](https://docs.microsoft.com/en-us/azure/storage/common/storage-sas-overview) for `acme` and [add it to the Key Vault as a secret](https://docs.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal) called `ACME-SAS`.
-<img width="589" alt="acme container within Storage Account" src="https://user-images.githubusercontent.com/18073815/122643383-85702080-d0dd-11eb-80bb-456ed637b66e.png">
-<img width="687" alt="acme container SAS URL within Key Vault" src="https://user-images.githubusercontent.com/18073815/122643578-89e90900-d0de-11eb-80b0-47aca61f549c.png">
-
-### Run the Function App
-
-1. The Function App's only Function, `RenewCert`, is configured with a [timer trigger](https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=powershell) that executes the Function once per week. You can also [execute the function at-will from the VS Code extension](https://docs.microsoft.com/en-us/azure/azure-functions/functions-develop-vs-code?tabs=csharp#run-functions-in-azure).
+1. The Function App's only Function, `RenewCert`, is configured with a [timer trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=powershell) that executes the Function once per week. You can also [execute the function at-will from the VS Code extension](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-vs-code?tabs=csharp#run-functions-in-azure).
 1. If everything is configured correctly, the Function will:
-    1. Get the Storage Account SAS URL from Azure Key Vault.
-    1. Use AzCopy to copy the Posh-ACME state from the `acme` Blob container to the Function App.
+    1. Create a Storage Account Context using the Function App's MSI.
+    1. Use Azure PowerShell to copy the Posh-ACME state from a Blob Container to the Function App.
     1. Use Posh-ACME to check if the certificate(s) need to be renewed:
-        * If it does:
+        * If it/they does:
             * Renew the certificate(s) using Posh-ACME.
             * Add the updated certificate(s) to Azure Key Vault (overwriting the expired certificate(s)).
-            * Push the updated Posh-ACME state from the Function App to the `acme` Blob container.
-            * The CDN will automatically pull and deploy the `latest` version of the certificate(s).
-        * If it does not, do nothing.
+            * Push the updated Posh-ACME state from the Function App to the Blob Container, ensuring only modified files are updated.
+        * If it/they do(es) not, do nothing.
 
-## Thanks
+## Optional
 
-A lot of the Posh-ACME code (and the idea to store the Posh-ACME state in Azure Storage) was taken from [@brent-robinson](https://github.com/brent-robinson)'s fantastic [Medium article](https://medium.com/@brentrobinson5/automating-certificate-management-with-azure-and-lets-encrypt-fee6729e2b78) on setting this up using Azure DevOps Pipelines.
+### Configure Azure CDN custom domain to use Key Vault certificate
+
+1. Navigate to your CDN profile, then to the endpoint using the Azure Portal.
+
+<img width="593" alt="Screenshot 2023-02-01 at 12 22 40 PM" src="https://user-images.githubusercontent.com/18073815/216117168-6b508aa8-47de-400a-b48c-041e1b19f337.png">
+
+1. Open the CDN endpoint's custom domain that you want to assign the certificate to.
+1. In the custom domain, select the Key Vault certificate you just imported (make sure the Azure CDN identity can access the Key Vault).
+
+<img width="712" alt="Screenshot 2023-02-01 at 12 20 08 PM" src="https://user-images.githubusercontent.com/18073815/216116513-b8ec396f-7fec-4bcb-86aa-ddf277aadd3d.png">

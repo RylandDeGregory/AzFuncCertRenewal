@@ -7,7 +7,7 @@
             "request": "attach",
             "customPipeName": "AzureFunctionsPSWorker",
             "runspaceId": 1,
-            "preLaunchTask": "func: host start"
+            "preLaunchTask": "func: start"
         }
     ]
 }
