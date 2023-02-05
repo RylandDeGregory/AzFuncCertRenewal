@@ -38,6 +38,12 @@ New-AzResourceGroupDeployment -ResourceGroupName 'testing' -TemplateFile ./Infra
 az group deployment create --resource-group 'testing' --template-file ./Infrastructure/main.bicep --parameters "{ \"dnsZoneName\": { \"value\": \"my-domain.com\" } }" --verbose
 ```
 
+### Add Posh-ACME config to Storage Account
+
+Using the [Azure Storage Explorer](https://learn.microsoft.com/en-us/azure/vs-azure-tools-storage-manage-with-storage-explorer), add the content of your local `$env:POSHACME_HOME` directory to the `acme` container within the Storage Account that was created as part of the [Infrastructure](#infrastructure) deployment.
+
+<img width="656" alt="Storage Explorer" src="https://user-images.githubusercontent.com/18073815/216796822-cb05a5b2-701b-4544-9b50-a2f4a76a1980.png">
+
 ### Function App
 
 1. The Function App's only Function, `RenewCert`, is configured with a [timer trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=powershell) that executes the Function once per week. You can also [execute the function at-will from the VS Code extension](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-vs-code?tabs=csharp#run-functions-in-azure).
