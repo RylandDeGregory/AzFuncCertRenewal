@@ -2,7 +2,6 @@
 param($Timer)
 
 # Session configuration
-$global:ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 
 # Get variables from Function App Settings
