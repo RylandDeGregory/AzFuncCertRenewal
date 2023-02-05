@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.13.1.58284",
-      "templateHash": "891290343541857534"
+      "templateHash": "809811782065411988"
     }
   },
   "parameters": {
@@ -79,10 +79,17 @@
         "description": "Key Vault name. Default: kv-lecertrenew-$<uniqueSuffix>"
       }
     },
-    "keyVaultCertNames": {
+    "dnsZoneResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "DNS Zone Resource Group name. Default: resourceGroup().name"
+      }
+    },
+    "dnsZoneName": {
       "type": "string",
       "metadata": {
-        "description": "Lets Encrypt SSL certificate name(s) within Azure Key Vault. Accepts single value or multiple comma-separated values"
+        "description": "DNS Zone name"
       }
     }
   },
@@ -343,10 +350,6 @@
               "value": "[parameters('keyVaultName')]"
             },
             {
-              "name": "AKV_CERT_NAME",
-              "value": "[parameters('keyVaultCertNames')]"
-            },
-            {
               "name": "STORAGE_ACCOUNT_NAME",
               "value": "[parameters('storageAccountName')]"
             },
@@ -425,6 +428,125 @@
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
         "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "DNSZoneRoleAssignment",
+      "resourceGroup": "[parameters('dnsZoneResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "dnsZoneName": {
+            "value": "[parameters('dnsZoneName')]"
+          },
+          "functionAppId": {
+            "value": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+          },
+          "functionAppPrincipalId": {
+            "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.principalId]"
+          },
+          "uniqueSuffix": {
+            "value": "[parameters('uniqueSuffix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.13.1.58284",
+              "templateHash": "6964227812452475245"
+            }
+          },
+          "parameters": {
+            "functionAppId": {
+              "type": "string",
+              "metadata": {
+                "description": "Function App Resource ID to assign Role to"
+              }
+            },
+            "functionAppPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Function App Managed Identity Service Principal ID"
+              }
+            },
+            "dnsZoneName": {
+              "type": "string",
+              "metadata": {
+                "description": "DNS Zone to assign Role over"
+              }
+            },
+            "uniqueSuffix": {
+              "type": "string",
+              "defaultValue": "[substring(uniqueString(resourceGroup().id), 0, 5)]",
+              "metadata": {
+                "description": "Unique suffix to add to Custom Role name. Default: substring(uniqueString(resourceGroup().id), 0, 5)"
+              }
+            }
+          },
+          "variables": {
+            "customRoleName": "[guid(subscription().id, string(variables('customRoleActions')))]",
+            "customRoleActions": [
+              "Microsoft.Authorization/*/read",
+              "Microsoft.Insights/alertRules/*",
+              "Microsoft.Network/dnsZones/TXT/*",
+              "Microsoft.Network/dnsZones/read",
+              "Microsoft.ResourceHealth/availabilityStatuses/read",
+              "Microsoft.Resources/deployments/read",
+              "Microsoft.Resources/subscriptions/resourceGroups/read"
+            ]
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleDefinitions",
+              "apiVersion": "2022-04-01",
+              "name": "[variables('customRoleName')]",
+              "properties": {
+                "roleName": "[format('DNS TXT Contributor - {0}', parameters('uniqueSuffix'))]",
+                "description": "Manage DNS TXT records only.",
+                "type": "customRole",
+                "permissions": [
+                  {
+                    "actions": "[variables('customRoleActions')]"
+                  }
+                ],
+                "assignableScopes": [
+                  "[resourceGroup().id]"
+                ]
+              },
+              "metadata": {
+                "description": "Custom RBAC role to allow management of TXT records in a DNS Zone"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Network/dnsZones/{0}', parameters('dnsZoneName'))]",
+              "name": "[guid(parameters('functionAppId'), resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName')))]",
+              "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName'))]",
+                "principalId": "[parameters('functionAppPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName'))]"
+              ],
+              "metadata": {
+                "description": "Allows Function App Managed Idetity to manage DNS TXT records"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
       ]
     }
   ]

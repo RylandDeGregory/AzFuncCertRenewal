@@ -28,6 +28,12 @@ param functionAppName string = 'func-lecertrenew-${uniqueSuffix}'
 @description('Key Vault name. Default: kv-lecertrenew-$<uniqueSuffix>')
 param keyVaultName string = 'kv-lecertrenew-${uniqueSuffix}'
 
+@description('DNS Zone Resource Group name. Default: resourceGroup().name')
+param dnsZoneResourceGroupName string = resourceGroup().name
+
+@description('DNS Zone name')
+param dnsZoneName string
+
 // Default logging policy for all resources
 var defaultLogOrMetric = {
   enabled: logsEnabled
@@ -47,7 +53,7 @@ resource rgLock 'Microsoft.Authorization/locks@2016-09-01' = {
   }
 }
 
-// RBAC Role definitions
+// Built-in RBAC Role definitions
 @description('Built-in Storage Blob Data Contributor role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-contributor')
 resource storageBlobContributorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   scope: subscription()
@@ -80,6 +86,18 @@ resource funcMIVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
     roleDefinitionId: keyVaultCertificatesOfficerRole.id
     principalId: func.identity.principalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+// DNS Zone Role assignment
+module funcMIDnsRole 'dns.bicep' = {
+  name: 'DNSZoneRoleAssignment'
+  scope: resourceGroup(dnsZoneResourceGroupName)
+  params: {
+    dnsZoneName: dnsZoneName
+    functionAppId: func.id
+    functionAppPrincipalId: func.identity.principalId
+    uniqueSuffix: uniqueSuffix
   }
 }
 
