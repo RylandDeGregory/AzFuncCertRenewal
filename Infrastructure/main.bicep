@@ -38,7 +38,7 @@ param dnsZoneName string
 var defaultLogOrMetric = {
   enabled: logsEnabled
   retentionPolicy: {
-    days: logsEnabled ? 7 : 0
+    days: logsEnabled ? 30 : 0
     enabled: logsEnabled
   }
 }

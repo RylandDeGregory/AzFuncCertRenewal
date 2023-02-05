@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.13.1.58284",
-      "templateHash": "11522326721067171121"
+      "templateHash": "8760060196876143785"
     }
   },
   "parameters": {
@@ -97,7 +97,7 @@
     "defaultLogOrMetric": {
       "enabled": "[parameters('logsEnabled')]",
       "retentionPolicy": {
-        "days": "[if(parameters('logsEnabled'), 7, 0)]",
+        "days": "[if(parameters('logsEnabled'), 30, 0)]",
         "enabled": "[parameters('logsEnabled')]"
       }
     }
