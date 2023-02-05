@@ -66,7 +66,7 @@ foreach ($CertOrder in $CertOrders) {
 
     # Import LetsEncrypt cert to AKV if it does not exist
     if (-not $AKVCert) {
-        $AKVCert = Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass
+        $AKVCert = Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $(ConvertTo-SecureString -String $CertOrder.PfxPass -AsPlainText -Force)
     }
 
     # Get LetsEncrypt certificate object
