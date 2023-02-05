@@ -33,7 +33,8 @@ function Start-AzStorageBlobContainerSync {
         } | Sort-Object -Property Name
         Write-Verbose "Got MD5 Hash for [$($BlobHash.Count)] Azure Storage Blobs"
 
-        $FileHash = Get-ChildItem -Path "$LiteralPath/$Container" -Recurse -File | ForEach-Object {
+        $FilePath = Join-Path $LiteralPath $Container
+        $FileHash = Get-ChildItem -Path $FilePath -Recurse -File | ForEach-Object {
             $Hash = Get-FileHash -Path $_.FullName -Algorithm MD5 | Select-Object -ExpandProperty Hash
             [PSCustomObject]@{
                 Name       = $_.FullName.Split($LiteralPath)[1]
