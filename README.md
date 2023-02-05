@@ -7,7 +7,7 @@
 
 ## Setup
 
-The following instructions assume that you are using [Azure DNS](https://learn.microsoft.com/en-us/azure/dns/dns-overview) with your domain.
+The following instructions assume that you are using [Azure DNS](https://learn.microsoft.com/en-us/azure/dns/dns-overview) with your domain. If you are not, follow the Microsoft documentation to set up an Azure DNS Zone for your domain. [Tutorial: Host your domain in Azure DNS](https://learn.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns).
 
 ### Installation
 
@@ -19,10 +19,6 @@ The following instructions assume that you are using [Azure DNS](https://learn.m
 
 1. Configure your Posh-ACME environment by following the module's [tutorial](https://poshac.me/docs/v4/Tutorial/).
 1. Generate a certificate locally by following the module's [Azure tutorial](https://poshac.me/docs/v4/Plugins/Azure/).
-
-### Set up Azure DNS Zone
-
-Follow the Microsoft documentation to set up an Azure DNS Zone for your domain. [Tutorial: Host your domain in Azure DNS](https://learn.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns).
 
 ## Usage
 
