@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.13.1.58284",
-      "templateHash": "809811782065411988"
+      "templateHash": "15765394807006986698"
     }
   },
   "parameters": {
@@ -356,10 +356,6 @@
             {
               "name": "BLOB_CONTAINER_NAME",
               "value": "[parameters('blobContainerName')]"
-            },
-            {
-              "name": "POSHACME_HOME",
-              "value": "./tmp"
             }
           ],
           "alwaysOn": false

@@ -275,10 +275,6 @@ resource func 'Microsoft.Web/sites@2022-03-01' = {
           name: 'BLOB_CONTAINER_NAME'
           value: blobContainerName
         }
-        {
-          name: 'POSHACME_HOME'
-          value: './tmp'
-        }
       ]
       alwaysOn: false
     }

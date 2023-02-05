@@ -7,9 +7,12 @@ $ErrorActionPreference = 'Stop'
 
 # Set variables from Function App Settings
 $KeyVaultName       = $env:KEY_VAULT_NAME
-$TempDir            = $env:POSHACME_HOME
 $StorageAccountName = $env:STORAGE_ACCOUNT_NAME
 $BlobContainerName  = $env:BLOB_CONTAINER_NAME
+
+# Set Posh-ACME base directory
+$TempDir = Join-Path $env:AzureWebJobsScriptRoot 'tmp'
+$env:POSHACME_HOME = $TempDir
 
 # Get Subscription ID from MSI context
 $SubscriptionId = (Get-AzContext).Subscription.Id
@@ -57,11 +60,10 @@ function Start-AzStorageBlobContainerSync {
         } | Sort-Object -Property Name
         Write-Verbose "Got MD5 Hash for [$($BlobHash.Count)] Azure Storage Blobs"
 
-        $FilePath = Join-Path $LiteralPath $Container $Separator
-        $FileHash = Get-ChildItem -Path $FilePath -Recurse -File | ForEach-Object {
+        $FileHash = Get-ChildItem -Path $LiteralPath -Recurse -File | ForEach-Object {
             $Hash = Get-FileHash -Path $_.FullName -Algorithm MD5 | Select-Object -ExpandProperty Hash
             [PSCustomObject]@{
-                Name       = $_.FullName.Split($FilePath)[1]
+                Name       = $_.FullName.Split($LiteralPath)[1]
                 ContentMD5 = [system.convert]::ToBase64String([system.convert]::FromHexString($Hash))
                 HexMD5     = $Hash
             }
