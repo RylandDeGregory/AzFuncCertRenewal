@@ -53,7 +53,7 @@ try {
 
 #region Process
 foreach ($CertOrder in $CertOrders) {
-    Write-Information "Get LetsEncrypt certificate configuration for $($CertOrder.MainDomain)"
+    Write-Information "Get LetsEncrypt certificate order for [$($CertOrder.MainDomain)] from Posh-ACME config"
 
     # Set certificate file information for Key Vault import
     $ServerName  = ([uri](Get-PAServer).location).host
@@ -66,6 +66,7 @@ foreach ($CertOrder in $CertOrders) {
 
     # Import LetsEncrypt cert to AKV if it does not exist
     if (-not $AKVCert) {
+        Write-Information "No Azure Key Vault certificate exists for [$($CertOrder.MainDomain)]. Importing certificate from Posh-ACME configuration"
         $AKVCert = Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $(ConvertTo-SecureString -String $CertOrder.PfxPass -AsPlainText -Force)
     }
 
