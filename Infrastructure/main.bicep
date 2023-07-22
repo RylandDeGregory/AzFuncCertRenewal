@@ -53,37 +53,20 @@ resource rgLock 'Microsoft.Authorization/locks@2016-09-01' = {
   }
 }
 
-// Built-in RBAC Role definitions
+// Built-in RBAC Role definition
 @description('Built-in Storage Blob Data Contributor role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-contributor')
 resource storageBlobContributorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   scope: subscription()
   name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 }
 
-@description('Built-in Key Vault Certificates Officer role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#key-vault-certificates-officer')
-resource keyVaultCertificatesOfficerRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  scope: subscription()
-  name: 'a4417e6f-fecd-4de8-b567-7b0420556985'
-}
-
-// RBAC Role assignments
+// RBAC Role assignment
 @description('Allows Function App Managed Identity to write to Storage Account')
 resource funcMIBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(func.id, st.id, storageBlobContributorRole.id)
   scope: st
   properties: {
     roleDefinitionId: storageBlobContributorRole.id
-    principalId: func.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-@description('Allows Function App Managed Identity to manage Key Vault Certificates')
-resource funcMIVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(func.id, kv.id, keyVaultCertificatesOfficerRole.id)
-  scope: kv
-  properties: {
-    roleDefinitionId: keyVaultCertificatesOfficerRole.id
     principalId: func.identity.principalId
     principalType: 'ServicePrincipal'
   }
@@ -292,7 +275,7 @@ resource funcDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-0
 }
 
 // Key Vault
-resource kv 'Microsoft.KeyVault/vaults@2022-07-01' = {
+resource kv 'Microsoft.KeyVault/vaults@2023-02-01' = {
   name: keyVaultName
   location: location
   properties: {
@@ -300,14 +283,45 @@ resource kv 'Microsoft.KeyVault/vaults@2022-07-01' = {
       family: 'A'
       name: 'standard'
     }
-    enableRbacAuthorization: true
+    enableRbacAuthorization: false
     enableSoftDelete: true
+    enablePurgeProtection: true
     enabledForDeployment: false
     enabledForDiskEncryption: false
     enabledForTemplateDeployment: false
     publicNetworkAccess: 'Enabled'
     softDeleteRetentionInDays: 30
     tenantId: tenant().tenantId
+  }
+}
+
+resource kvFuncAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-02-01' = {
+  name: guid(func.id, kv.id)
+  properties: {
+    accessPolicies: [
+      {
+        objectId: func.identity.principalId
+        permissions: {
+          certificates: [
+            'all'
+          ]
+        }
+        tenantId: func.identity.tenantId
+      }
+      {
+        // See: https://learn.microsoft.com/en-us/azure/cdn/cdn-custom-ssl?tabs=option-2-enable-https-with-your-own-certificate#register-azure-cdn
+        objectId: '205478c0-bd83-4e1b-a9d6-db63a3e1e1c8' // Microsoft.AzureFrontDoor-Cdn
+        permissions: {
+          certificates: [
+            'get'
+          ]
+          secrets: [
+            'get'
+          ]
+        }
+        tenantId: tenant().tenantId
+      }
+    ]
   }
 }
 
