@@ -10,7 +10,7 @@ param dnsZoneName string
 @description('Unique suffix to add to Custom Role name. Default: substring(uniqueString(resourceGroup().id), 0, 5)')
 param uniqueSuffix string = substring(uniqueString(resourceGroup().id), 0, 5)
 
-var customRoleName = guid(subscription().id, string(customRoleActions))
+var customRoleName = guid(subscription().id, string(customRoleActions), uniqueSuffix)
 var customRoleActions = [
   'Microsoft.Authorization/*/read'
   'Microsoft.Insights/alertRules/*'
