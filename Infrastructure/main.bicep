@@ -60,14 +60,31 @@ resource storageBlobContributorRole 'Microsoft.Authorization/roleDefinitions@202
   name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 }
 
+@description('Built-in Key Vault Certificates Officer role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#key-vault-certificates-officer')
+resource keyVaultCertificatesOfficerRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  scope: subscription()
+  name: 'a4417e6f-fecd-4de8-b567-7b0420556985'
+}
+
 // RBAC Role assignment
 @description('Allows Function App Managed Identity to write to Storage Account')
 resource funcMIBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(func.id, st.id, storageBlobContributorRole.id)
+  name: guid(funcApp.id, st.id, storageBlobContributorRole.id)
   scope: st
   properties: {
     roleDefinitionId: storageBlobContributorRole.id
-    principalId: func.identity.principalId
+    principalId: funcApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+@description('Allows Function App Managed Identity to manage Key Vault Certificates')
+resource funcMIVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(funcApp.id, kv.id, keyVaultCertificatesOfficerRole.id)
+  scope: kv
+  properties: {
+    roleDefinitionId: keyVaultCertificatesOfficerRole.id
+    principalId: funcApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -78,8 +95,8 @@ module funcMIDnsRole 'dns.bicep' = {
   scope: resourceGroup(dnsZoneResourceGroupName)
   params: {
     dnsZoneName: dnsZoneName
-    functionAppId: func.id
-    functionAppPrincipalId: func.identity.principalId
+    functionAppId: funcApp.id
+    functionAppPrincipalId: funcApp.identity.principalId
     uniqueSuffix: uniqueSuffix
   }
 }
@@ -199,7 +216,7 @@ resource aspDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01
 }
 
 // Function App
-resource func 'Microsoft.Web/sites@2022-03-01' = {
+resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'
@@ -227,6 +244,10 @@ resource func 'Microsoft.Web/sites@2022-03-01' = {
           value: 'DefaultEndpointsProtocol=https;AccountName=${st.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${st.listKeys().keys[0].value}'
         }
         {
+          name: 'AzureFunctionsJobHost__managedDependency__enabled'
+          value: 'true'
+        }
+        {
           name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
           value: 'DefaultEndpointsProtocol=https;AccountName=${st.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${st.listKeys().keys[0].value}'
         }
@@ -241,10 +262,6 @@ resource func 'Microsoft.Web/sites@2022-03-01' = {
         {
           name: 'FUNCTIONS_WORKER_RUNTIME'
           value: 'powershell'
-        }
-        {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: 'https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/main/src.zip?raw=true'
         }
         {
           name: 'KEY_VAULT_NAME'
@@ -264,9 +281,30 @@ resource func 'Microsoft.Web/sites@2022-03-01' = {
   }
 }
 
-resource funcDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource funcAppFunction 'Microsoft.Web/sites/functions@2022-09-01' = {
+  name: 'RenewLECerts'
+  parent: funcApp
+  properties: {
+    config: {
+      bindings: [
+        {
+          type: 'timerTrigger'
+          name: 'Timer'
+          direction: 'in'
+          schedule: '0 0 0 * * 0'
+        }
+      ]
+    }
+    files: {
+      'run.ps1': loadTextContent('../RenewLECerts/run.ps1')
+      '../requirements.psd1': loadTextContent('../requirements.psd1')
+    }
+  }
+}
+
+resource funcAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'All Logs and Metrics'
-  scope: func
+  scope: funcApp
   properties: {
     logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
     metrics: [ union({ category: 'AllMetrics' }, defaultLogOrMetric) ]
@@ -283,7 +321,7 @@ resource kv 'Microsoft.KeyVault/vaults@2023-02-01' = {
       family: 'A'
       name: 'standard'
     }
-    enableRbacAuthorization: false
+    enableRbacAuthorization: true
     enableSoftDelete: true
     enablePurgeProtection: true
     enabledForDeployment: false
@@ -292,36 +330,6 @@ resource kv 'Microsoft.KeyVault/vaults@2023-02-01' = {
     publicNetworkAccess: 'Enabled'
     softDeleteRetentionInDays: 30
     tenantId: tenant().tenantId
-  }
-}
-
-resource kvFuncAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-02-01' = {
-  name: guid(func.id, kv.id)
-  properties: {
-    accessPolicies: [
-      {
-        objectId: func.identity.principalId
-        permissions: {
-          certificates: [
-            'all'
-          ]
-        }
-        tenantId: func.identity.tenantId
-      }
-      {
-        // See: https://learn.microsoft.com/en-us/azure/cdn/cdn-custom-ssl?tabs=option-2-enable-https-with-your-own-certificate#register-azure-cdn
-        objectId: '205478c0-bd83-4e1b-a9d6-db63a3e1e1c8' // Microsoft.AzureFrontDoor-Cdn
-        permissions: {
-          certificates: [
-            'get'
-          ]
-          secrets: [
-            'get'
-          ]
-        }
-        tenantId: tenant().tenantId
-      }
-    ]
   }
 }
 
