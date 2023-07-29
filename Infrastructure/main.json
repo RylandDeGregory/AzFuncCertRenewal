@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.13.1.58284",
-      "templateHash": "3853851414292909514"
+      "version": "0.19.5.34762",
+      "templateHash": "2617367565752649751"
     }
   },
   "parameters": {
@@ -94,6 +94,8 @@
     }
   },
   "variables": {
+    "$fxv#0": "#region Init\r\nparam($Timer)\r\n\r\n# Session configuration\r\n$ProgressPreference    = 'SilentlyContinue'\r\n$ErrorActionPreference = 'Stop'\r\n\r\n# Set variables from Function App Settings\r\n$KeyVaultName       = $env:KEY_VAULT_NAME\r\n$StorageAccountName = $env:STORAGE_ACCOUNT_NAME\r\n$BlobContainerName  = $env:BLOB_CONTAINER_NAME\r\n\r\n# Set Posh-ACME base directory\r\n$TempDir = Join-Path $env:AzureWebJobsScriptRoot 'tmp'\r\n$env:POSHACME_HOME = $TempDir\r\n\r\n# Get Subscription ID from MSI context\r\n$SubscriptionId = (Get-AzContext).Subscription.Id\r\n#endregion Init\r\n\r\n#region Functions\r\nfunction Start-AzStorageBlobContainerSync {\r\n    <#\r\n        .SYNOPSIS\r\n            Synchronize filesystem changes in a local directory to an Azure Storage blob container.\r\n        .NOTES\r\n            File changes are detected by differences in ContentMD5 value between a local file and the Azure blob with the same name.\r\n    #>\r\n    [CmdletBinding()]\r\n    [OutputType([Int])]\r\n    param (\r\n        # Azure Storage Context\r\n        [Parameter(Mandatory)]\r\n        [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext] $Context,\r\n\r\n        # Azure Storage Account Blob Container name\r\n        [Parameter(Mandatory)]\r\n        [String] $Container,\r\n\r\n        # Local Filesystem Path to directory containing $Container folder\r\n        [Parameter(Mandatory)]\r\n        [ValidateScript({Test-Path $_})]\r\n        [String] $LiteralPath\r\n    )\r\n\r\n    process {\r\n        $Separator = [IO.Path]::DirectorySeparatorChar\r\n        if ($LiteralPath -notmatch \"$Separator$\") {\r\n            Write-Verbose \"Append directory separator character [$Separator] to end of LiteralPath [$LiteralPath]\"\r\n            $LiteralPath += $Separator\r\n        }\r\n\r\n        $BlobHash = Get-AzStorageBlob -Context $Context -Container $Container | ForEach-Object {\r\n            $_.ICloudBlob.FetchAttributes()\r\n            [PSCustomObject]@{\r\n                Name       = $_.Name\r\n                ContentMD5 = $_.ICloudBlob.Properties.ContentMD5\r\n                HexMD5     = [system.convert]::ToHexString([System.Convert]::FromBase64String($_.ICloudBlob.Properties.ContentMD5))\r\n            }\r\n        } | Sort-Object -Property Name\r\n        Write-Verbose \"Got MD5 Hash for [$($BlobHash.Count)] Azure Storage Blobs\"\r\n\r\n        $FileHash = Get-ChildItem -Path $LiteralPath -Recurse -File | ForEach-Object {\r\n            $Hash = Get-FileHash -Path $_.FullName -Algorithm MD5 | Select-Object -ExpandProperty Hash\r\n            [PSCustomObject]@{\r\n                Name       = $_.FullName.Split($LiteralPath)[1]\r\n                ContentMD5 = [system.convert]::ToBase64String([system.convert]::FromHexString($Hash))\r\n                HexMD5     = $Hash\r\n            }\r\n        } | Sort-Object -Property Name\r\n        Write-Verbose \"Got MD5 hash for [$($FileHash.Count)] local files\"\r\n\r\n        $DiffFiles = Compare-Object -ReferenceObject $BlobHash -DifferenceObject $FileHash -Property Name, ContentMD5 | Where-Object { $_.SideIndicator -EQ '=>' }\r\n        Write-Verbose \"[$($DiffFiles.Count)] local files have been updated. Uploading to Azure Storage container [$Container]\"\r\n\r\n        $DiffFiles | ForEach-Object {\r\n            $FileName = $_.Name\r\n            $RelativeFilePath = $FileHash | Where-Object { $_.Name -eq $FileName } | Select-Object -ExpandProperty Name\r\n            $FilePath = \"$($LiteralPath)$RelativeFilePath\"\r\n            Write-Verbose \"Upload file [$FilePath] to Azure Storage Blob Container [$Container] as [$FileName]\"\r\n            Set-AzStorageBlobContent -Context $Context -Container $Container -Blob $FileName -File $FilePath -Force\r\n        }\r\n\r\n        if ($DiffFiles.Count -gt 0) {\r\n            return $DiffFiles.Count\r\n        }\r\n    }\r\n}\r\n#endregion Functions\r\n\r\n#region Configure\r\n# Create Azure Storage Context\r\n$StorageCtx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount\r\n\r\nWrite-Information 'Generate ARM Access Token using Function App MSI'\r\n$AzToken = (Get-AzAccessToken -ResourceTypeName ResourceManager).Token\r\n\r\nif (-not (Test-Path -Path $TempDir)) {\r\n    Write-Information \"Create Posh-ACME home directory [$TempDir]\"\r\n    New-Item -ItemType Directory -Path $TempDir -Force | Out-Null\r\n}\r\n\r\nWrite-Information \"Sync current Posh-ACME configuration from Storage Account [$StorageAccountName] to $TempDir\"\r\nGet-AzStorageBlob -Context $StorageCtx -Container $BlobContainerName | ForEach-Object {\r\n    Get-AzStorageBlobContent -Context $StorageCtx -Container $BlobContainerName -Blob $_.Name -Destination $TempDir\r\n}\r\n\r\nWrite-Information \"Initialize Posh-ACME in $TempDir\"\r\nImport-Module Posh-ACME -Force -Verbose\r\n\r\ntry {\r\n    Write-Information 'Get certificate orders from synced Posh-ACME directory'\r\n    $CertOrders = Get-PAOrder -List\r\n} catch {\r\n    Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that location'\r\n}\r\n\r\ntry {\r\n    Write-Information 'Get certificates from Azure Key Vault'\r\n    $AKVCerts = Get-AzKeyVaultCertificate -VaultName $KeyVaultName | ForEach-Object { Get-AzKeyVaultCertificate -VaultName $_.VaultName -Name $_.Name }\r\n} catch {\r\n    Write-Error \"Error getting certificates from Azure Key Vault [$KeyVaultName]: $_\"\r\n}\r\n#endregion Configure\r\n\r\n#region Process\r\nforeach ($CertOrder in $CertOrders) {\r\n    Write-Information \"Get LetsEncrypt certificate order for [$($CertOrder.MainDomain)] from Posh-ACME config\"\r\n\r\n    # Set certificate file information for Key Vault import\r\n    $ServerName  = ([uri](Get-PAServer).location).host\r\n    $AccountName = (Get-PAAccount).id\r\n    $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')\r\n\r\n    # Select AKV certificate based on the domain name associated with the current LetsEncrypt certificate\r\n    $AKVCertName = $CertOrder.MainDomain.Replace('.','-')\r\n    $AKVCert = $AKVCerts | Where-Object { $_.Certificate.Subject.Replace('CN=','') -eq $CertOrder.MainDomain }\r\n\r\n    if (-not $AKVCert) {\r\n        Write-Information \"No Azure Key Vault certificate exists for [$($CertOrder.MainDomain)]. Importing certificate from Posh-ACME configuration\"\r\n        $AKVCert = Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $(ConvertTo-SecureString -String $CertOrder.PfxPass -AsPlainText -Force)\r\n    }\r\n\r\n    # Get LetsEncrypt certificate object\r\n    $LECert = Get-PACertificate -MainDomain $CertOrder.MainDomain\r\n\r\n    # Check if the LetsEncrypt certificate is available for renewal\r\n    if ($CertOrder.RenewAfter -and ((Get-Date $CertOrder.RenewAfter) -le (Get-Date))) {\r\n        Write-Information \"Certificate is ready for renewal as of [$(Get-Date $CertOrder.RenewAfter)]. Renewing certificate...\"\r\n\r\n        # Ensure that the AKV certificate matches the LetsEncrypt certificate synced from Azure Storage\r\n        if ($AKVCert.Thumbprint -eq $LECert.Thumbprint) {\r\n            Write-Information \"Certificate is [$($CertOrder.status)]. Submitting renewal for certificate with thumbprint [$($LECert.Thumbprint)]\"\r\n\r\n            # Renew the certificate using Posh-ACME and the Azure DNS plugin\r\n            $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AzAccessToken = $AzToken } -MainDomain $CertOrder.MainDomain -Verbose\r\n        } elseif (-not $AKVCert) {\r\n            Write-Error \"Azure Key Vault certificate with name [$AKVCertName] was not found in Key Vault [$KeyVaultName]\"\r\n        } else {\r\n            Write-Error \"Azure Key Vault certificate thumbprint [$($AKVCert.Thumbprint)] does not match LetsEncrypt certificate thumbprint [$($LECert.Thumbprint)] prior to renewal. Please eliminate the inconsistency\"\r\n        }\r\n\r\n        # Ensure that a new certificate was generated by Posh-ACME and that it does not match the current AKV certificate\r\n        if ($NewCert -and $AKVCert.Thumbprint -ne $NewCert.Thumbprint) {\r\n            if (Test-Path $CertFile) {\r\n                Write-Information \"Import updated certificate [$CertFile] with thumbprint [$($NewCert.Thumbprint)] to Azure Key Vault\"\r\n                Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $NewCert.PfxPass\r\n\r\n                Write-Information 'Sync updated Posh-ACME configuration to Storage Account'\r\n                Start-AzStorageBlobContainerSync -Context $StorageCtx -Container $BlobContainerName -LiteralPath $TempDir -Verbose\r\n            } else {\r\n                Write-Error \"Certificate [$CertFile] is not valid for import to Azure Key Vault\"\r\n            }\r\n        } elseif (-not $NewCert) {\r\n            Write-Error 'Certificate was not successfully renewed by Posh-ACME'\r\n        }\r\n    } elseif ($AKVCert.Thumbprint -ne $LECert.Thumbprint) {\r\n        # Set certificate file information for Key Vault import\r\n        $ServerName  = ([system.uri](Get-PAServer).location).host\r\n        $AccountName = (Get-PAAccount).id\r\n        $CertFile    = [IO.Path]::Combine($TempDir, $ServerName, $AccountName, $CertOrder.MainDomain, 'fullchain.pfx')\r\n\r\n        Write-Information \"Import certificate with thumbprint [$($LECert.Thumbprint)] to Azure Key Vault\"\r\n        Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $LECert.PfxPass\r\n    } elseif (-not $CertOrder.RenewAfter) {\r\n        Write-Error \"Certificate for $($CertOrder.MainDomain) does not have a 'RenewAfter' value. Please confirm that the Storage Account and Function App state are in sync\"\r\n    } else {\r\n        Write-Information \"Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate\"\r\n    }\r\n}\r\n\r\nWrite-Information \"Remove Posh-ACME configuration files from local directory [$TempDir]\"\r\nRemove-Item -Path $TempDir -Recurse -Force\r\n\r\nWrite-Information 'Complete.'\r\n#endregion Process",
+    "$fxv#1": "# This file enables modules to be automatically managed by the Functions service.\n# See https://aka.ms/functionsmanageddependency for additional information.\n#\n@{\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'.\n    # To use the Az module in your function app, please uncomment the line below.\n    'Az.Accounts' = '2.*'\n    'Az.KeyVault' = '4.*'\n    'Az.Storage'  = '5.*'\n    'Posh-ACME'   = '4.*'\n}",
     "defaultLogOrMetric": {
       "enabled": "[parameters('logsEnabled')]",
       "retentionPolicy": {
@@ -322,16 +324,12 @@
               "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appInsightsName')), '2020-02-02').ConnectionString]"
             },
             {
+              "name": "AzureFunctionsJobHost__managedDependency__enabled",
+              "value": "true"
+            },
+            {
               "name": "AzureWebJobsStorage",
               "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2022-05-01').keys[0].value)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2022-05-01').keys[0].value)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTSHARE",
-              "value": "[toLower(parameters('functionAppName'))]"
             },
             {
               "name": "FUNCTIONS_EXTENSION_VERSION",
@@ -342,8 +340,16 @@
               "value": "powershell"
             },
             {
-              "name": "WEBSITE_RUN_FROM_PACKAGE",
-              "value": "https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/main/src.zip?raw=true"
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2022-05-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(parameters('functionAppName'))]"
+            },
+            {
+              "name": "BLOB_CONTAINER_NAME",
+              "value": "[parameters('blobContainerName')]"
             },
             {
               "name": "KEY_VAULT_NAME",
@@ -352,10 +358,6 @@
             {
               "name": "STORAGE_ACCOUNT_NAME",
               "value": "[parameters('storageAccountName')]"
-            },
-            {
-              "name": "BLOB_CONTAINER_NAME",
-              "value": "[parameters('blobContainerName')]"
             }
           ],
           "alwaysOn": false
@@ -366,6 +368,30 @@
         "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
         "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
         "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/functions",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/{1}', parameters('functionAppName'), 'RenewLECerts')]",
+      "properties": {
+        "config": {
+          "bindings": [
+            {
+              "type": "timerTrigger",
+              "name": "Timer",
+              "direction": "in",
+              "schedule": "0 0 0 * * 0"
+            }
+          ]
+        },
+        "files": {
+          "run.ps1": "[variables('$fxv#0')]",
+          "../requirements.psd1": "[variables('$fxv#1')]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
       ]
     },
     {
@@ -389,7 +415,7 @@
     },
     {
       "type": "Microsoft.KeyVault/vaults",
-      "apiVersion": "2022-07-01",
+      "apiVersion": "2023-02-01",
       "name": "[parameters('keyVaultName')]",
       "location": "[parameters('location')]",
       "properties": {
@@ -399,6 +425,7 @@
         },
         "enableRbacAuthorization": true,
         "enableSoftDelete": true,
+        "enablePurgeProtection": true,
         "enabledForDeployment": false,
         "enabledForDiskEncryption": false,
         "enabledForTemplateDeployment": false,
@@ -428,7 +455,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
+      "apiVersion": "2022-09-01",
       "name": "DNSZoneRoleAssignment",
       "resourceGroup": "[parameters('dnsZoneResourceGroupName')]",
       "properties": {
@@ -456,8 +483,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.13.1.58284",
-              "templateHash": "6964227812452475245"
+              "version": "0.19.5.34762",
+              "templateHash": "3589254272101637886"
             }
           },
           "parameters": {
@@ -488,7 +515,7 @@
             }
           },
           "variables": {
-            "customRoleName": "[guid(subscription().id, string(variables('customRoleActions')))]",
+            "customRoleName": "[guid(subscription().id, string(variables('customRoleActions')), parameters('uniqueSuffix'))]",
             "customRoleActions": [
               "Microsoft.Authorization/*/read",
               "Microsoft.Insights/alertRules/*",
