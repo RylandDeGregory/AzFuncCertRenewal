@@ -53,7 +53,7 @@ resource rgLock 'Microsoft.Authorization/locks@2016-09-01' = {
   }
 }
 
-// Built-in RBAC Role definition
+// Built-in RBAC Role definitions
 @description('Built-in Storage Blob Data Contributor role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-contributor')
 resource storageBlobContributorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   scope: subscription()
@@ -66,7 +66,7 @@ resource keyVaultCertificatesOfficerRole 'Microsoft.Authorization/roleDefinition
   name: 'a4417e6f-fecd-4de8-b567-7b0420556985'
 }
 
-// RBAC Role assignment
+// RBAC Role assignments
 @description('Allows Function App Managed Identity to write to Storage Account')
 resource funcMIBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(funcApp.id, st.id, storageBlobContributorRole.id)
@@ -240,20 +240,12 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           value: appi.properties.ConnectionString
         }
         {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${st.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${st.listKeys().keys[0].value}'
-        }
-        {
           name: 'AzureFunctionsJobHost__managedDependency__enabled'
           value: 'true'
         }
         {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
+          name: 'AzureWebJobsStorage'
           value: 'DefaultEndpointsProtocol=https;AccountName=${st.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${st.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(functionAppName)
         }
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
@@ -264,16 +256,24 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           value: 'powershell'
         }
         {
+          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${st.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${st.listKeys().keys[0].value}'
+        }
+        {
+          name: 'WEBSITE_CONTENTSHARE'
+          value: toLower(functionAppName)
+        }
+        {
+          name: 'BLOB_CONTAINER_NAME'
+          value: blobContainerName
+        }
+        {
           name: 'KEY_VAULT_NAME'
           value: kv.name
         }
         {
           name: 'STORAGE_ACCOUNT_NAME'
           value: st.name
-        }
-        {
-          name: 'BLOB_CONTAINER_NAME'
-          value: blobContainerName
         }
       ]
       alwaysOn: false
