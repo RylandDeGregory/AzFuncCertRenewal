@@ -95,10 +95,13 @@ $StorageCtx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseC
 Write-Information 'Generate ARM Access Token using Function App MSI'
 $AzToken = (Get-AzAccessToken -ResourceTypeName ResourceManager).Token
 
-if (-not (Test-Path -Path $TempDir)) {
-    Write-Information "Create Posh-ACME home directory [$TempDir]"
-    New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+# Remove local temp directory if it exists
+if (Test-Path -Path $TempDir) {
+    Remove-Item -Path $TempDir -Recurse -Force
 }
+
+Write-Information "Create Posh-ACME home directory [$TempDir]"
+New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
 Write-Information "Sync current Posh-ACME configuration from Storage Account [$StorageAccountName] to $TempDir"
 Get-AzStorageBlob -Context $StorageCtx -Container $BlobContainerName | ForEach-Object {
