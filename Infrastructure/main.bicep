@@ -240,6 +240,10 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           value: appi.properties.ConnectionString
         }
         {
+          name: 'AzureFunctionsJobHost__functionTimeout'
+          value: '00:10:00'
+        }
+        {
           name: 'AzureFunctionsJobHost__managedDependency__enabled'
           value: 'true'
         }
