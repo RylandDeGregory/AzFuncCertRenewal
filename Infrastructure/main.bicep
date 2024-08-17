@@ -191,8 +191,8 @@ resource asp 'Microsoft.Web/serverfarms@2023-12-01' = {
     reserved: true
   }
   sku: {
-    tier: 'FlexConsumption'
-    name: 'FC1'
+    name: 'Y1'
+    tier: 'Consumption'
   }
 }
 
@@ -219,7 +219,7 @@ resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: asp.id
     keyVaultReferenceIdentity: 'SystemAssigned'
     siteConfig: {
-      linuxFxVersion: 'POWERSHELL|7.4'
+      linuxFxVersion: 'POWERSHELL|7.2'
       appSettings: [
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
