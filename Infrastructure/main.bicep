@@ -14,7 +14,7 @@ param logAnalyticsWorkspaceName string = 'log-lecertrenew-${uniqueSuffix}'
 param appInsightsName string = 'appi-lecertrenew-${uniqueSuffix}'
 
 @description('Storage Account name. Default: stlecertrenew$<uniqueSuffix>')
-param storageAccountName string = 'stlecertrenew${uniqueSuffix}'
+param storageAccountName string = 'stlecertrenew${replace(uniqueSuffix, '-', '')}'
 
 @description('Blob container name within Storage Account. Default: acme')
 param blobContainerName string = 'acme'
@@ -44,7 +44,7 @@ var defaultLogOrMetric = {
 }
 
 // Resource Group Lock
-resource rgLock 'Microsoft.Authorization/locks@2016-09-01' = {
+resource rgLock 'Microsoft.Authorization/locks@2020-05-01' = {
   scope: resourceGroup()
   name: 'DoNotDelete'
   properties: {
@@ -70,7 +70,7 @@ resource keyVaultCertificatesOfficerRole 'Microsoft.Authorization/roleDefinition
 @description('Allows Function App Managed Identity to write to Storage Account')
 resource funcMIBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(funcApp.id, st.id, storageBlobContributorRole.id)
-  scope: st
+  scope: resourceGroup()
   properties: {
     roleDefinitionId: storageBlobContributorRole.id
     principalId: funcApp.identity.principalId
@@ -81,7 +81,7 @@ resource funcMIBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 @description('Allows Function App Managed Identity to manage Key Vault Certificates')
 resource funcMIVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(funcApp.id, kv.id, keyVaultCertificatesOfficerRole.id)
-  scope: kv
+  scope: resourceGroup()
   properties: {
     roleDefinitionId: keyVaultCertificatesOfficerRole.id
     principalId: funcApp.identity.principalId
@@ -113,16 +113,6 @@ resource log 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   }
 }
 
-resource logDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: 'All Logs and Metrics'
-  scope: log
-  properties: {
-    logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
-    metrics: [ union({ categoryGroup: 'allMetrics' }, defaultLogOrMetric) ]
-    workspaceId: log.id
-  }
-}
-
 // Application Insights
 resource appi 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
@@ -138,7 +128,7 @@ resource appi 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 // Storage Account
-resource st 'Microsoft.Storage/storageAccounts@2022-05-01' = {
+resource st 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
   kind: 'StorageV2'
@@ -152,7 +142,7 @@ resource st 'Microsoft.Storage/storageAccounts@2022-05-01' = {
 }
 
 // Enable Blob Soft Delete
-resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' = {
+resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   name: 'default'
   parent: st
   properties: {
@@ -168,7 +158,7 @@ resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' = {
 }
 
 // Blob Container
-resource stBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
+resource stBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   name: blobContainerName
   parent: stBlob
 }
@@ -193,7 +183,7 @@ resource stBlobDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05
 }
 
 // App Service Plan
-resource asp 'Microsoft.Web/serverfarms@2022-03-01' = {
+resource asp 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: appServicePlanName
   location: location
   kind: 'linux'
@@ -201,8 +191,8 @@ resource asp 'Microsoft.Web/serverfarms@2022-03-01' = {
     reserved: true
   }
   sku: {
-    name: 'Y1'
-    tier: 'Dynamic'
+    tier: 'FlexConsumption'
+    name: 'FC1'
   }
 }
 
@@ -216,7 +206,7 @@ resource aspDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01
 }
 
 // Function App
-resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
+resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'
@@ -229,12 +219,8 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
     serverFarmId: asp.id
     keyVaultReferenceIdentity: 'SystemAssigned'
     siteConfig: {
-      linuxFxVersion: 'POWERSHELL|7.2'
+      linuxFxVersion: 'POWERSHELL|7.4'
       appSettings: [
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: appi.properties.InstrumentationKey
-        }
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appi.properties.ConnectionString
@@ -260,14 +246,6 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           value: 'powershell'
         }
         {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${st.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${st.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(functionAppName)
-        }
-        {
           name: 'BLOB_CONTAINER_NAME'
           value: blobContainerName
         }
@@ -279,29 +257,12 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           name: 'STORAGE_ACCOUNT_NAME'
           value: st.name
         }
-      ]
-      alwaysOn: false
-    }
-  }
-}
-
-resource funcAppFunction 'Microsoft.Web/sites/functions@2022-09-01' = {
-  name: 'RenewLECerts'
-  parent: funcApp
-  properties: {
-    config: {
-      bindings: [
         {
-          type: 'timerTrigger'
-          name: 'Timer'
-          direction: 'in'
-          schedule: '0 0 0 * * 0'
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: 'https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/main/src.zip?raw=true'
         }
       ]
-    }
-    files: {
-      'run.ps1': loadTextContent('../RenewLECerts/run.ps1')
-      '../requirements.psd1': loadTextContent('../requirements.psd1')
+      alwaysOn: false
     }
   }
 }
@@ -317,7 +278,7 @@ resource funcAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-0
 }
 
 // Key Vault
-resource kv 'Microsoft.KeyVault/vaults@2023-02-01' = {
+resource kv 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
   location: location
   properties: {
