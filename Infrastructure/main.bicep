@@ -34,6 +34,7 @@ param dnsZoneResourceGroupName string = resourceGroup().name
 @description('Existing DNS Zone name (should match domain name)')
 param dnsZoneName string
 
+
 // Default logging policy for all resources
 var defaultLogOrMetric = {
   enabled: logsEnabled
@@ -43,15 +44,6 @@ var defaultLogOrMetric = {
   }
 }
 
-// Resource Group Lock
-resource rgLock 'Microsoft.Authorization/locks@2020-05-01' = {
-  scope: resourceGroup()
-  name: 'DoNotDelete'
-  properties: {
-    level: 'CanNotDelete'
-    notes: 'This lock prevents the accidental deletion of resources'
-  }
-}
 
 // Built-in RBAC Role definitions
 @description('Built-in Storage Blob Data Contributor role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-contributor')
@@ -69,22 +61,22 @@ resource keyVaultCertificatesOfficerRole 'Microsoft.Authorization/roleDefinition
 // RBAC Role assignments
 @description('Allows Function App Managed Identity to write to Storage Account')
 resource funcMIBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(funcApp.id, st.id, storageBlobContributorRole.id)
+  name: guid(functionApp.id, storageAccount.id, storageBlobContributorRole.id)
   scope: resourceGroup()
   properties: {
     roleDefinitionId: storageBlobContributorRole.id
-    principalId: funcApp.identity.principalId
+    principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
 
 @description('Allows Function App Managed Identity to manage Key Vault Certificates')
 resource funcMIVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(funcApp.id, kv.id, keyVaultCertificatesOfficerRole.id)
+  name: guid(functionApp.id, keyVault.id, keyVaultCertificatesOfficerRole.id)
   scope: resourceGroup()
   properties: {
     roleDefinitionId: keyVaultCertificatesOfficerRole.id
-    principalId: funcApp.identity.principalId
+    principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -95,14 +87,24 @@ module funcMIDnsRole 'dns.bicep' = {
   scope: resourceGroup(dnsZoneResourceGroupName)
   params: {
     dnsZoneName: dnsZoneName
-    functionAppId: funcApp.id
-    functionAppPrincipalId: funcApp.identity.principalId
+    functionAppId: functionApp.id
+    functionAppPrincipalId: functionApp.identity.principalId
     uniqueSuffix: uniqueSuffix
   }
 }
 
+// Resource Group Lock
+resource rgLock 'Microsoft.Authorization/locks@2020-05-01' = {
+  scope: resourceGroup()
+  name: 'DoNotDelete'
+  properties: {
+    level: 'CanNotDelete'
+    notes: 'This lock prevents the accidental deletion of resources'
+  }
+}
+
 // Log Analytics Workspace
-resource log 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsWorkspaceName
   location: location
   properties: {
@@ -114,7 +116,7 @@ resource log 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 }
 
 // Application Insights
-resource appi 'Microsoft.Insights/components@2020-02-02' = {
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
   location: location
   kind: 'web'
@@ -128,7 +130,7 @@ resource appi 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 // Storage Account
-resource st 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
   kind: 'StorageV2'
@@ -139,51 +141,47 @@ resource st 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     publicNetworkAccess: 'Enabled'
     allowBlobPublicAccess: false
   }
-}
 
-// Enable Blob Soft Delete
-resource stBlob 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
-  name: 'default'
-  parent: st
-  properties: {
-    containerDeleteRetentionPolicy: {
-      enabled: true
-      days: 30
+  resource blobService 'blobServices' = {
+    name: 'default'
+    properties: {
+      containerDeleteRetentionPolicy: {
+        enabled: true
+        days: 30
+      }
+      deleteRetentionPolicy: {
+        enabled: true
+        days: 14
+      }
     }
-    deleteRetentionPolicy: {
-      enabled: true
-      days: 14
+
+    resource blobContainer 'containers' = {
+      name: blobContainerName
     }
   }
 }
 
-// Blob Container
-resource stBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
-  name: blobContainerName
-  parent: stBlob
-}
-
-resource stDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource storageAccountDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'All Logs and Metrics'
-  scope: st
+  scope: storageAccount
   properties: {
     metrics: [ union({ categoryGroup: 'allMetrics' }, defaultLogOrMetric) ]
-    workspaceId: log.id
+    workspaceId: logAnalyticsWorkspace.id
   }
 }
 
-resource stBlobDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource blobServiceDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'All Logs and Metrics'
-  scope: stBlob
+  scope: storageAccount::blobService
   properties: {
     logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
     metrics: [ union({ categoryGroup: 'allMetrics' }, defaultLogOrMetric) ]
-    workspaceId: log.id
+    workspaceId: logAnalyticsWorkspace.id
   }
 }
 
 // App Service Plan
-resource asp 'Microsoft.Web/serverfarms@2023-12-01' = {
+resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: appServicePlanName
   location: location
   kind: 'linux'
@@ -196,17 +194,17 @@ resource asp 'Microsoft.Web/serverfarms@2023-12-01' = {
   }
 }
 
-resource aspDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource appServicePlanDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'All Logs and Metrics'
-  scope: asp
+  scope: appServicePlan
   properties: {
     metrics: [ union({ category: 'AllMetrics' }, defaultLogOrMetric) ]
-    workspaceId: log.id
+    workspaceId: logAnalyticsWorkspace.id
   }
 }
 
 // Function App
-resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
+resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'
@@ -216,14 +214,14 @@ resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     httpsOnly: true
     reserved: true
-    serverFarmId: asp.id
+    serverFarmId: appServicePlan.id
     keyVaultReferenceIdentity: 'SystemAssigned'
     siteConfig: {
-      linuxFxVersion: 'POWERSHELL|7.2'
+      linuxFxVersion: 'POWERSHELL|7.4'
       appSettings: [
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appi.properties.ConnectionString
+          value: appInsights.properties.ConnectionString
         }
         {
           name: 'AzureFunctionsJobHost__functionTimeout'
@@ -235,7 +233,7 @@ resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${st.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${st.listKeys().keys[0].value}'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
         }
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
@@ -251,11 +249,11 @@ resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'KEY_VAULT_NAME'
-          value: kv.name
+          value: keyVault.name
         }
         {
           name: 'STORAGE_ACCOUNT_NAME'
-          value: st.name
+          value: storageAccount.name
         }
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
@@ -267,18 +265,18 @@ resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
   }
 }
 
-resource funcAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource functionAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'All Logs and Metrics'
-  scope: funcApp
+  scope: functionApp
   properties: {
     logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
     metrics: [ union({ category: 'AllMetrics' }, defaultLogOrMetric) ]
-    workspaceId: log.id
+    workspaceId: logAnalyticsWorkspace.id
   }
 }
 
 // Key Vault
-resource kv 'Microsoft.KeyVault/vaults@2023-07-01' = {
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
   location: location
   properties: {
@@ -298,12 +296,12 @@ resource kv 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-resource kvDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource keyVaultDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'All Logs and Metrics'
-  scope: kv
+  scope: keyVault
   properties: {
     logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
     metrics: [ union({ category: 'AllMetrics' }, defaultLogOrMetric) ]
-    workspaceId: log.id
+    workspaceId: logAnalyticsWorkspace.id
   }
 }

@@ -10,7 +10,8 @@ param dnsZoneName string
 @description('Unique suffix to add to Custom Role name. Default: substring(uniqueString(resourceGroup().id), 0, 5)')
 param uniqueSuffix string = substring(uniqueString(resourceGroup().id), 0, 5)
 
-var customRoleName = guid(subscription().id, string(customRoleActions), uniqueSuffix)
+
+var customRoleName = guid(resourceGroup().id, string(customRoleActions), uniqueSuffix)
 var customRoleActions = [
   'Microsoft.Authorization/*/read'
   'Microsoft.Insights/alertRules/*'
@@ -20,6 +21,12 @@ var customRoleActions = [
   'Microsoft.Resources/deployments/read'
   'Microsoft.Resources/subscriptions/resourceGroups/read'
 ]
+
+
+// DNS Zone
+resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' existing = {
+  name: dnsZoneName
+}
 
 // Custom RBAC Role definition
 @description('Custom RBAC role to allow management of TXT records in a DNS Zone')
@@ -38,11 +45,6 @@ resource dnsTxtContributrorRole 'Microsoft.Authorization/roleDefinitions@2022-04
       resourceGroup().id
     ]
   }
-}
-
-// DNS Zone
-resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' existing = {
-  name: dnsZoneName
 }
 
 // Custom RBAC Role assigment
