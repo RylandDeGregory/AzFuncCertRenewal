@@ -11,3 +11,6 @@ __azurite_db*__.json
 
 # MacOS artifacts
 .DS_Store
+
+# local params file
+main.bicepparam
