@@ -10,7 +10,8 @@ param dnsZoneName string
 @description('Unique suffix to add to Custom Role name. Default: substring(uniqueString(resourceGroup().id), 0, 5)')
 param uniqueSuffix string = substring(uniqueString(resourceGroup().id), 0, 5)
 
-var customRoleName = guid(subscription().id, string(customRoleActions), uniqueSuffix)
+
+var customRoleName = guid(resourceGroup().id, string(customRoleActions), uniqueSuffix)
 var customRoleActions = [
   'Microsoft.Authorization/*/read'
   'Microsoft.Insights/alertRules/*'
@@ -21,9 +22,15 @@ var customRoleActions = [
   'Microsoft.Resources/subscriptions/resourceGroups/read'
 ]
 
+
+// DNS Zone
+resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' existing = {
+  name: dnsZoneName
+}
+
 // Custom RBAC Role definition
 @description('Custom RBAC role to allow management of TXT records in a DNS Zone')
-resource dnsTxtContributrorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+resource dnsTxtContributorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
   name: customRoleName
   properties: {
     roleName: 'DNS TXT Contributor - ${uniqueSuffix}'
@@ -40,18 +47,13 @@ resource dnsTxtContributrorRole 'Microsoft.Authorization/roleDefinitions@2022-04
   }
 }
 
-// DNS Zone
-resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' existing = {
-  name: dnsZoneName
-}
-
 // Custom RBAC Role assigment
 @description('Allows Function App Managed Idetity to manage DNS TXT records')
 resource funcMIDnsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(functionAppId, dnsZone.id, dnsTxtContributrorRole.id)
+  name: guid(functionAppId, dnsZone.id, dnsTxtContributorRole.id)
   scope: dnsZone
   properties: {
-    roleDefinitionId: dnsTxtContributrorRole.id
+    roleDefinitionId: dnsTxtContributorRole.id
     principalId: functionAppPrincipalId
     principalType: 'ServicePrincipal'
   }

@@ -93,7 +93,8 @@ function Start-AzStorageBlobContainerSync {
 $StorageCtx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
 
 Write-Information 'Generate ARM Access Token using Function App MSI'
-$AzToken = (Get-AzAccessToken -ResourceTypeName ResourceManager).Token
+$AzTokenSecure = Get-AzAccessToken -ResourceTypeName ResourceManager -AsSecureString | Select-Object -ExpandProperty Token
+$AzToken = (New-Object System.Management.Automation.PSCredential ('null', $AzTokenSecure)).GetNetworkCredential().Password
 
 # Remove local temp directory if it exists
 if (Test-Path -Path $TempDir) {
@@ -108,19 +109,21 @@ Get-AzStorageBlob -Context $StorageCtx -Container $BlobContainerName | ForEach-O
     Get-AzStorageBlobContent -Context $StorageCtx -Container $BlobContainerName -Blob $_.Name -Destination $TempDir
 }
 
-Write-Information "Initialize Posh-ACME in $TempDir"
+Write-Information "Initialize Posh-ACME in [$TempDir]"
 Import-Module Posh-ACME -Force -Verbose
 
 try {
     Write-Information 'Get certificate orders from synced Posh-ACME directory'
     $CertOrders = Get-PAOrder -List
 } catch {
-    Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that location'
+    Write-Error 'Posh-ACME cannot detect certificate order. Please ensure that $env:POSHACME_HOME is properly configured, and the certificate order is in that directory'
 }
 
 try {
     Write-Information 'Get certificates from Azure Key Vault'
-    $AKVCerts = Get-AzKeyVaultCertificate -VaultName $KeyVaultName | ForEach-Object { Get-AzKeyVaultCertificate -VaultName $_.VaultName -Name $_.Name }
+    $AKVCerts = Get-AzKeyVaultCertificate -VaultName $KeyVaultName | ForEach-Object {
+        Get-AzKeyVaultCertificate -VaultName $_.VaultName -Name $_.Name
+    }
 } catch {
     Write-Error "Error getting certificates from Azure Key Vault [$KeyVaultName]: $_"
 }
@@ -155,8 +158,12 @@ foreach ($CertOrder in $CertOrders) {
         if ($AKVCert.Thumbprint -eq $LECert.Thumbprint) {
             Write-Information "Certificate is [$($CertOrder.status)]. Submitting renewal for certificate with thumbprint [$($LECert.Thumbprint)]"
 
-            # Renew the certificate using Posh-ACME and the Azure DNS plugin
-            $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AzAccessToken = $AzToken } -MainDomain $CertOrder.MainDomain -Verbose
+            try {
+                # Renew the certificate using Posh-ACME and its Azure DNS plugin
+                $NewCert = Submit-Renewal -PluginArgs @{ AZSubscriptionId = $SubscriptionId; AzAccessToken = $AzToken } -MainDomain $CertOrder.MainDomain -Verbose
+            } catch {
+                Write-Error "Certificate renewal for [$($CertOrder.MainDomain)] failed: $_"
+            }
         } elseif (-not $AKVCert) {
             Write-Error "Azure Key Vault certificate with name [$AKVCertName] was not found in Key Vault [$KeyVaultName]"
         } else {
@@ -186,7 +193,7 @@ foreach ($CertOrder in $CertOrders) {
         Write-Information "Import certificate with thumbprint [$($LECert.Thumbprint)] to Azure Key Vault"
         Import-AzKeyVaultCertificate -VaultName $KeyVaultName -Name $AKVCertName -FilePath $CertFile -Password $LECert.PfxPass
     } elseif (-not $CertOrder.RenewAfter) {
-        Write-Error "Certificate for $($CertOrder.MainDomain) does not have a 'RenewAfter' value. Please confirm that the Storage Account and Function App state are in sync"
+        Write-Error "Certificate for $($CertOrder.MainDomain) does not have a 'RenewAfter' value. Please confirm that the Storage Account and Function App files are in sync"
     } else {
         Write-Information "Certificate is valid until $(Get-Date $CertOrder.CertExpires). No action required for this certificate"
     }
