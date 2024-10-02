@@ -30,7 +30,7 @@ resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' existing = {
 
 // Custom RBAC Role definition
 @description('Custom RBAC role to allow management of TXT records in a DNS Zone')
-resource dnsTxtContributrorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+resource dnsTxtContributorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
   name: customRoleName
   properties: {
     roleName: 'DNS TXT Contributor - ${uniqueSuffix}'
@@ -50,10 +50,10 @@ resource dnsTxtContributrorRole 'Microsoft.Authorization/roleDefinitions@2022-04
 // Custom RBAC Role assigment
 @description('Allows Function App Managed Idetity to manage DNS TXT records')
 resource funcMIDnsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(functionAppId, dnsZone.id, dnsTxtContributrorRole.id)
+  name: guid(functionAppId, dnsZone.id, dnsTxtContributorRole.id)
   scope: dnsZone
   properties: {
-    roleDefinitionId: dnsTxtContributrorRole.id
+    roleDefinitionId: dnsTxtContributorRole.id
     principalId: functionAppPrincipalId
     principalType: 'ServicePrincipal'
   }
