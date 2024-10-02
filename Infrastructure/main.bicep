@@ -35,16 +35,6 @@ param dnsZoneResourceGroupName string = resourceGroup().name
 param dnsZoneName string
 
 
-// Default logging policy for all resources
-var defaultLogOrMetric = {
-  enabled: logsEnabled
-  retentionPolicy: {
-    days: logsEnabled ? 30 : 0
-    enabled: logsEnabled
-  }
-}
-
-
 // Built-in RBAC Role definitions
 @description('Built-in Storage Blob Data Contributor role. See https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-contributor')
 resource storageBlobContributorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
@@ -161,21 +151,18 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 
-resource storageAccountDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: 'All Logs and Metrics'
-  scope: storageAccount
-  properties: {
-    metrics: [ union({ categoryGroup: 'allMetrics' }, defaultLogOrMetric) ]
-    workspaceId: logAnalyticsWorkspace.id
-  }
-}
-
-resource blobServiceDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource blobServiceDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (logsEnabled) {
   name: 'All Logs and Metrics'
   scope: storageAccount::blobService
   properties: {
-    logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
-    metrics: [ union({ categoryGroup: 'allMetrics' }, defaultLogOrMetric) ]
+    logs: [{
+      categoryGroup: 'allLogs'
+      enabled: true
+    }]
+    metrics: [{
+      category: 'Transaction'
+      enabled: true
+    }]
     workspaceId: logAnalyticsWorkspace.id
   }
 }
@@ -194,11 +181,14 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   }
 }
 
-resource appServicePlanDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource appServicePlanDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (logsEnabled) {
   name: 'All Logs and Metrics'
   scope: appServicePlan
   properties: {
-    metrics: [ union({ category: 'AllMetrics' }, defaultLogOrMetric) ]
+    metrics: [{
+      category: 'AllMetrics'
+      enabled: true
+  }]
     workspaceId: logAnalyticsWorkspace.id
   }
 }
@@ -265,12 +255,18 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   }
 }
 
-resource functionAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource funcDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (logsEnabled) {
   name: 'All Logs and Metrics'
   scope: functionApp
   properties: {
-    logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
-    metrics: [ union({ category: 'AllMetrics' }, defaultLogOrMetric) ]
+    logs: [{
+      categoryGroup: 'allLogs'
+      enabled: true
+    }]
+    metrics: [{
+      category: 'AllMetrics'
+      enabled: true
+    }]
     workspaceId: logAnalyticsWorkspace.id
   }
 }
@@ -296,12 +292,18 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-resource keyVaultDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource kvDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (logsEnabled) {
   name: 'All Logs and Metrics'
   scope: keyVault
   properties: {
-    logs: [ union({ categoryGroup: 'allLogs' }, defaultLogOrMetric) ]
-    metrics: [ union({ category: 'AllMetrics' }, defaultLogOrMetric) ]
+    logs: [{
+      categoryGroup: 'allLogs'
+      enabled: true
+    }]
+    metrics: [{
+      category: 'AllMetrics'
+      enabled: true
+    }]
     workspaceId: logAnalyticsWorkspace.id
   }
 }
