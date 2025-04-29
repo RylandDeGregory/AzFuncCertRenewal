@@ -4,11 +4,62 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.29.47.4906",
-      "templateHash": "2873052858051182043"
+      "version": "0.34.44.8038",
+      "templateHash": "8981053788019599971"
     }
   },
   "parameters": {
+    "appInsightsName": {
+      "type": "string",
+      "defaultValue": "[format('appi-lecertrenew-{0}', parameters('uniqueSuffix'))]",
+      "minLength": 1,
+      "maxLength": 260,
+      "metadata": {
+        "description": "The name of the Azure Application Insights resource. Default: appi-lecertrenew-$<uniqueSuffix>"
+      }
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "[format('asp-lecertrenew-{0}', parameters('uniqueSuffix'))]",
+      "minLength": 2,
+      "maxLength": 60,
+      "metadata": {
+        "description": "The name of the Azure App Service Plan.. Default: asp-lecertrenew-$<uniqueSuffix>"
+      }
+    },
+    "blobContainerName": {
+      "type": "string",
+      "defaultValue": "acme",
+      "minLength": 3,
+      "maxLength": 63,
+      "metadata": {
+        "description": "The name of the Azure Storage Account Blob container. Default: acme"
+      }
+    },
+    "dnsZoneResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The Azure Resource ID of the existing Azure DNS Zone. Default: resourceGroup().name"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "[format('func-lecertrenew-{0}', parameters('uniqueSuffix'))]",
+      "minLength": 2,
+      "maxLength": 60,
+      "metadata": {
+        "description": "The name of the Azure Function App. Default: func-lecertrenew-$<uniqueSuffix>"
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "defaultValue": "[format('kv-lecertrenew-{0}', parameters('uniqueSuffix'))]",
+      "minLength": 3,
+      "maxLength": 24,
+      "metadata": {
+        "description": "The name of the Azure Key Vault. Default: kv-lecertrenew-$<uniqueSuffix>"
+      }
+    },
     "location": {
       "type": "string",
       "defaultValue": "[resourceGroup().location]",
@@ -16,87 +67,71 @@
         "description": "The Azure Region to deploy the resources into. Default: resourceGroup().location"
       }
     },
-    "logsEnabled": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Switch to enable/disable DiagnosticSettings for the resources. Default: false"
-      }
-    },
-    "uniqueSuffix": {
-      "type": "string",
-      "defaultValue": "[substring(uniqueString(resourceGroup().id), 0, 5)]",
-      "metadata": {
-        "description": "A unique string to add as a suffix to all resources. Default: substring(uniqueString(resourceGroup().id), 0, 5)"
-      }
-    },
     "logAnalyticsWorkspaceName": {
       "type": "string",
       "defaultValue": "[format('log-lecertrenew-{0}', parameters('uniqueSuffix'))]",
+      "minLength": 4,
+      "maxLength": 63,
       "metadata": {
-        "description": "Log Analytics Workspace name. Default: log-lecertrenew-$<uniqueSuffix>"
+        "description": "The name of the Azure Log Analytics Workspace that Diagnostic Settings will be connected to. Default: log-lecertrenew-$<uniqueSuffix>"
       }
     },
-    "appInsightsName": {
-      "type": "string",
-      "defaultValue": "[format('appi-lecertrenew-{0}', parameters('uniqueSuffix'))]",
+    "diagnosticSettingsEnabled": {
+      "type": "bool",
+      "defaultValue": false,
       "metadata": {
-        "description": "Application Insights name. Default: appi-lecertrenew-$<uniqueSuffix>"
+        "description": "If Azure Diagnostics Settings are enabled for the resources. Default: false"
       }
     },
     "storageAccountName": {
       "type": "string",
       "defaultValue": "[format('stlecertrenew{0}', replace(parameters('uniqueSuffix'), '-', ''))]",
+      "minLength": 3,
+      "maxLength": 24,
       "metadata": {
-        "description": "Storage Account name. Default: stlecertrenew$<uniqueSuffix>"
+        "description": "The name of the Azure Storage Account. Default: stlecertrenew$<uniqueSuffix>"
       }
     },
-    "blobContainerName": {
+    "uniqueSuffix": {
       "type": "string",
-      "defaultValue": "acme",
+      "defaultValue": "[substring(uniqueString(resourceGroup().id), 0, 5)]",
+      "maxLength": 5,
       "metadata": {
-        "description": "Blob container name within Storage Account. Default: acme"
-      }
-    },
-    "appServicePlanName": {
-      "type": "string",
-      "defaultValue": "[format('asp-lecertrenew-{0}', parameters('uniqueSuffix'))]",
-      "metadata": {
-        "description": "App Service Plan name. Default: asp-lecertrenew-$<uniqueSuffix>"
-      }
-    },
-    "functionAppName": {
-      "type": "string",
-      "defaultValue": "[format('func-lecertrenew-{0}', parameters('uniqueSuffix'))]",
-      "metadata": {
-        "description": "Function App name. Default: func-lecertrenew-$<uniqueSuffix>"
-      }
-    },
-    "keyVaultName": {
-      "type": "string",
-      "defaultValue": "[format('kv-lecertrenew-{0}', parameters('uniqueSuffix'))]",
-      "metadata": {
-        "description": "Key Vault name. Default: kv-lecertrenew-$<uniqueSuffix>"
-      }
-    },
-    "dnsZoneResourceGroupName": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().name]",
-      "metadata": {
-        "description": "Existing DNS Zone Resource Group name. Default: resourceGroup().name"
-      }
-    },
-    "dnsZoneName": {
-      "type": "string",
-      "metadata": {
-        "description": "Existing DNS Zone name (should match domain name)"
+        "description": "A unique string to add as a suffix to all resources. Default: substring(uniqueString(resourceGroup().id), 0, 5)"
       }
     }
   },
+  "variables": {
+    "dnsZoneSubscription": "[split(parameters('dnsZoneResourceId'), '/')[2]]",
+    "dnsZoneResourceGroup": "[split(parameters('dnsZoneResourceId'), '/')[4]]",
+    "dnsZoneName": "[split(parameters('dnsZoneResourceId'), '/')[8]]"
+  },
   "resources": [
     {
+      "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+      "apiVersion": "2024-04-01",
+      "name": "[format('{0}/{1}', parameters('functionAppName'), 'ftp')]",
+      "properties": {
+        "allow": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+      "apiVersion": "2024-04-01",
+      "name": "[format('{0}/{1}', parameters('functionAppName'), 'scm')]",
+      "properties": {
+        "allow": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ]
+    },
+    {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2024-01-01",
       "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', parameters('blobContainerName'))]",
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
@@ -104,7 +139,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2024-01-01",
       "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
       "properties": {
         "containerDeleteRetentionPolicy": {
@@ -126,7 +161,7 @@
       "name": "[guid(resourceId('Microsoft.Web/sites', parameters('functionAppName')), resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'))]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-04-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
@@ -134,7 +169,7 @@
         "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
       ],
       "metadata": {
-        "description": "Allows Function App Managed Identity to write to Storage Account"
+        "description": "Allows Function App Managed Identity to write to Storage Account."
       }
     },
     {
@@ -143,7 +178,7 @@
       "name": "[guid(resourceId('Microsoft.Web/sites', parameters('functionAppName')), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985'))]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985')]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-04-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
@@ -151,28 +186,7 @@
         "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
       ],
       "metadata": {
-        "description": "Allows Function App Managed Identity to manage Key Vault Certificates"
-      }
-    },
-    {
-      "type": "Microsoft.Authorization/locks",
-      "apiVersion": "2020-05-01",
-      "name": "DoNotDelete",
-      "properties": {
-        "level": "CanNotDelete",
-        "notes": "This lock prevents the accidental deletion of resources"
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2022-10-01",
-      "name": "[parameters('logAnalyticsWorkspaceName')]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "retentionInDays": 30,
-        "sku": {
-          "name": "PerGB2018"
-        }
+        "description": "Allows Function App Managed Identity to manage Key Vault Certificates."
       }
     },
     {
@@ -189,48 +203,8 @@
       }
     },
     {
-      "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2023-05-01",
-      "name": "[parameters('storageAccountName')]",
-      "location": "[parameters('location')]",
-      "kind": "StorageV2",
-      "sku": {
-        "name": "Standard_LRS"
-      },
-      "properties": {
-        "publicNetworkAccess": "Enabled",
-        "allowBlobPublicAccess": false
-      }
-    },
-    {
-      "condition": "[parameters('logsEnabled')]",
-      "type": "Microsoft.Insights/diagnosticSettings",
-      "apiVersion": "2021-05-01-preview",
-      "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/{1}', parameters('storageAccountName'), 'default')]",
-      "name": "All Logs and Metrics",
-      "properties": {
-        "logs": [
-          {
-            "categoryGroup": "allLogs",
-            "enabled": true
-          }
-        ],
-        "metrics": [
-          {
-            "category": "Transaction",
-            "enabled": true
-          }
-        ],
-        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
-      ]
-    },
-    {
       "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2023-12-01",
+      "apiVersion": "2024-04-01",
       "name": "[parameters('appServicePlanName')]",
       "location": "[parameters('location')]",
       "kind": "linux",
@@ -243,7 +217,7 @@
       }
     },
     {
-      "condition": "[parameters('logsEnabled')]",
+      "condition": "[parameters('diagnosticSettingsEnabled')]",
       "type": "Microsoft.Insights/diagnosticSettings",
       "apiVersion": "2021-05-01-preview",
       "scope": "[format('Microsoft.Web/serverfarms/{0}', parameters('appServicePlanName'))]",
@@ -264,7 +238,7 @@
     },
     {
       "type": "Microsoft.Web/sites",
-      "apiVersion": "2023-12-01",
+      "apiVersion": "2024-04-01",
       "name": "[parameters('functionAppName')]",
       "location": "[parameters('location')]",
       "kind": "functionapp,linux",
@@ -272,12 +246,12 @@
         "type": "SystemAssigned"
       },
       "properties": {
+        "endToEndEncryptionEnabled": true,
         "httpsOnly": true,
+        "keyVaultReferenceIdentity": "SystemAssigned",
         "reserved": true,
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
-        "keyVaultReferenceIdentity": "SystemAssigned",
         "siteConfig": {
-          "linuxFxVersion": "POWERSHELL|7.4",
           "appSettings": [
             {
               "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
@@ -293,7 +267,7 @@
             },
             {
               "name": "AzureWebJobsStorage",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value)]"
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01').keys[0].value)]"
             },
             {
               "name": "FUNCTIONS_EXTENSION_VERSION",
@@ -320,7 +294,12 @@
               "value": "https://github.com/RylandDeGregory/AzFuncCertRenewal/blob/main/src.zip?raw=true"
             }
           ],
-          "alwaysOn": false
+          "alwaysOn": false,
+          "ftpsState": "Disabled",
+          "linuxFxVersion": "POWERSHELL|7.4",
+          "http20Enabled": false,
+          "minTlsVersion": "1.3",
+          "remoteDebuggingEnabled": false
         }
       },
       "dependsOn": [
@@ -331,7 +310,7 @@
       ]
     },
     {
-      "condition": "[parameters('logsEnabled')]",
+      "condition": "[parameters('diagnosticSettingsEnabled')]",
       "type": "Microsoft.Insights/diagnosticSettings",
       "apiVersion": "2021-05-01-preview",
       "scope": "[format('Microsoft.Web/sites/{0}', parameters('functionAppName'))]",
@@ -358,7 +337,7 @@
     },
     {
       "type": "Microsoft.KeyVault/vaults",
-      "apiVersion": "2023-07-01",
+      "apiVersion": "2024-11-01",
       "name": "[parameters('keyVaultName')]",
       "location": "[parameters('location')]",
       "properties": {
@@ -378,7 +357,7 @@
       }
     },
     {
-      "condition": "[parameters('logsEnabled')]",
+      "condition": "[parameters('diagnosticSettingsEnabled')]",
       "type": "Microsoft.Insights/diagnosticSettings",
       "apiVersion": "2021-05-01-preview",
       "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('keyVaultName'))]",
@@ -404,10 +383,72 @@
       ]
     },
     {
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2020-05-01",
+      "name": "DoNotDelete",
+      "properties": {
+        "level": "CanNotDelete",
+        "notes": "This lock prevents the accidental deletion of resources"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[parameters('logAnalyticsWorkspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "retentionInDays": 30,
+        "sku": {
+          "name": "PerGB2018"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2024-01-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "properties": {
+        "publicNetworkAccess": "Enabled",
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "condition": "[parameters('diagnosticSettingsEnabled')]",
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}/blobServices/{1}', parameters('storageAccountName'), 'default')]",
+      "name": "All Logs and Metrics",
+      "properties": {
+        "logs": [
+          {
+            "categoryGroup": "allLogs",
+            "enabled": true
+          }
+        ],
+        "metrics": [
+          {
+            "category": "Transaction",
+            "enabled": true
+          }
+        ],
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+      ]
+    },
+    {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
       "name": "DNSZoneRoleAssignment",
-      "resourceGroup": "[parameters('dnsZoneResourceGroupName')]",
+      "subscriptionId": "[variables('dnsZoneSubscription')]",
+      "resourceGroup": "[variables('dnsZoneResourceGroup')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -415,13 +456,10 @@
         "mode": "Incremental",
         "parameters": {
           "dnsZoneName": {
-            "value": "[parameters('dnsZoneName')]"
-          },
-          "functionAppId": {
-            "value": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+            "value": "[variables('dnsZoneName')]"
           },
           "functionAppPrincipalId": {
-            "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'full').identity.principalId]"
+            "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2024-04-01', 'full').identity.principalId]"
           },
           "uniqueSuffix": {
             "value": "[parameters('uniqueSuffix')]"
@@ -433,34 +471,32 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.29.47.4906",
-              "templateHash": "10632479128583448744"
+              "version": "0.34.44.8038",
+              "templateHash": "15227183016125194714"
             }
           },
           "parameters": {
-            "functionAppId": {
+            "dnsZoneName": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
               "metadata": {
-                "description": "Function App Resource ID to assign Role to"
+                "description": "The name of the Azure DNS Zone to assign Azure RBAC Role on."
               }
             },
             "functionAppPrincipalId": {
               "type": "string",
+              "minLength": 36,
+              "maxLength": 36,
               "metadata": {
-                "description": "Function App Managed Identity Service Principal ID"
-              }
-            },
-            "dnsZoneName": {
-              "type": "string",
-              "metadata": {
-                "description": "DNS Zone to assign Role over"
+                "description": "Principal ID (Object ID) of the identity to assign Azure RBAC Role to."
               }
             },
             "uniqueSuffix": {
               "type": "string",
               "defaultValue": "[substring(uniqueString(resourceGroup().id), 0, 5)]",
               "metadata": {
-                "description": "Unique suffix to add to Custom Role name. Default: substring(uniqueString(resourceGroup().id), 0, 5)"
+                "description": "Unique suffix to add to Custom Azure RBAC Role name. Default: substring(uniqueString(resourceGroup().id), 0, 5)"
               }
             }
           },
@@ -482,37 +518,37 @@
               "apiVersion": "2022-04-01",
               "name": "[variables('customRoleName')]",
               "properties": {
-                "roleName": "[format('DNS TXT Contributor - {0}', parameters('uniqueSuffix'))]",
+                "assignableScopes": [
+                  "[resourceGroup().id]"
+                ],
                 "description": "Manage DNS TXT records only.",
-                "type": "customRole",
                 "permissions": [
                   {
                     "actions": "[variables('customRoleActions')]"
                   }
                 ],
-                "assignableScopes": [
-                  "[resourceGroup().id]"
-                ]
+                "roleName": "[format('DNS TXT Contributor - {0}', parameters('uniqueSuffix'))]",
+                "type": "customRole"
               },
               "metadata": {
-                "description": "Custom RBAC role to allow management of TXT records in a DNS Zone"
+                "description": "Custom RBAC role to allow management of TXT records in a DNS Zone."
               }
             },
             {
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "scope": "[format('Microsoft.Network/dnsZones/{0}', parameters('dnsZoneName'))]",
-              "name": "[guid(parameters('functionAppId'), resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName')))]",
+              "name": "[guid(resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName')), parameters('functionAppPrincipalId'))]",
               "properties": {
-                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName'))]",
                 "principalId": "[parameters('functionAppPrincipalId')]",
-                "principalType": "ServicePrincipal"
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName'))]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Authorization/roleDefinitions', variables('customRoleName'))]"
               ],
               "metadata": {
-                "description": "Allows Function App Managed Idetity to manage DNS TXT records"
+                "description": "Allows Function App Managed Identity to manage DNS TXT records."
               }
             }
           ]

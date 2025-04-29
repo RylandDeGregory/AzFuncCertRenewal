@@ -32,10 +32,16 @@ This application can also be deployed to Azure programmatically using [Azure Pow
 
 ```PowerShell
 # Azure PowerShell
-New-AzResourceGroupDeployment -ResourceGroupName 'testing' -TemplateFile ./Infrastructure/main.bicep -dnsZoneName 'my-domain.com' -Verbose
+$Params = @{
+    ResourceGroupName  = 'testing'
+    TemplateFile      = './Infrastructure/main.bicep'
+    dnsZoneResourceId = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/testing/providers/Microsoft.Network/dnszones/my-website.com'
+    Verbose           = $true
+}
+New-AzResourceGroupDeployment @Params
 
 # Azure CLI
-az group deployment create --resource-group 'testing' --template-file ./Infrastructure/main.bicep --parameters "{ \"dnsZoneName\": { \"value\": \"my-domain.com\" } }" --verbose
+az group deployment create --resource-group 'testing' --template-file ./Infrastructure/main.bicep --parameters "{ \"dnsZoneResourceId\": { \"value\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyResourceGroup/providers/Microsoft.Network/dnszones/my-website.com\" } }" --verbose
 ```
 
 ### Add Posh-ACME config to Storage Account
